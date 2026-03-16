@@ -1,0 +1,23 @@
+[general]
+name=TiltMaster - RF Vertical Analysis
+description=Advanced RF Vertical Analysis and Tilt Optimization for Telecom Planning
+version=1.0.0
+qgisMinimumVersion=3.22
+author=Achmad Amrulloh
+email=achmad.amrulloh@gmail.com
+license=GPL v3
+depends=pyqtgraph
+
+about=TiltMaster is a QGIS plugin designed for RF engineers and telecom planners. It performs vertical beam analysis, terrain intersection detection, coverage footprint calculation, and tilt optimization. Features include dual unit support (Metric/Imperial), embedded map canvas with OSM basemap, KMZ export for Google Earth, and comprehensive tilt optimization with 3 modes (Precise, Smart, Fast). Requires pyqtgraph for terrain visualization.
+
+category=Plugins
+tags=RF planning, telecom, antenna, tilt, coverage, vertical analysis, optimization, 5G, LTE, planning, beam, terrain, intersection
+
+homepage=https://github.com/erlrich/tiltmaster-qgis
+repository=https://github.com/erlrich/tiltmaster-qgis
+tracker=https://github.com/erlrich/tiltmaster-qgis/issues
+
+icon=resources/icons/tiltmaster.svg
+
+experimental=False
+deprecated=False

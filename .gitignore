@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# QGIS temp
+*.qml~
+*.qgs~
+*.qgz~
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+
+# Build / packaging
+dist/
+build/
+*.zip
+
+# Python environments
+venv/
+env/
