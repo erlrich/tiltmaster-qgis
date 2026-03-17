@@ -98,7 +98,7 @@ Advanced RF planning tools for telecommunication engineers. Perform vertical bea
 
 ```bash
 pip install pyqtgraph
-
+```
 ---
 
 ## License
