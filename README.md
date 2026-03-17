@@ -5,7 +5,9 @@
 
 Advanced RF planning tools for telecommunication engineers. Perform vertical beam analysis, terrain intersection detection, coverage footprint calculation, and tilt optimization.
 
-## Features
+---
+
+## 🚀 Features
 
 ### 📡 RF Vertical Analysis
 - **Terrain Profile**: Visualize terrain elevation along antenna azimuth
@@ -29,7 +31,19 @@ Advanced RF planning tools for telecommunication engineers. Perform vertical bea
 - Draggable legends for map and profile
 - KMZ export for Google Earth
 
-## Installation
+---
+
+## 📸 Screenshots
+
+### Basic RF Analysis
+![Basic RF](docs/images/basic_rf.png)
+
+### Tilt Optimizer
+![Tilt Optimizer](docs/images/tilt_optimizer.png)
+
+---
+
+## 📦 Installation
 
 ### From QGIS Plugin Repository (Coming Soon)
 1. Open QGIS
@@ -38,14 +52,17 @@ Advanced RF planning tools for telecommunication engineers. Perform vertical bea
 4. Click Install
 
 ### Manual Installation
-1. Download the latest release from [GitHub](https://github.com/erlrich/tiltmaster-qgis/releases)
+1. Download the latest release from GitHub  
+   👉 https://github.com/erlrich/tiltmaster-qgis/releases
 2. Extract to your QGIS plugins directory:
    - Windows: `C:\Users\YOUR_USERNAME\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\`
    - Linux: `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/`
    - macOS: `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/`
 3. Restart QGIS and enable the plugin in `Plugins → Manage and Install Plugins`
 
-## Quick Start Guide
+---
+
+## ⚡ Quick Start Guide
 
 ### 1. Basic Analysis
 1. Click the 📡 **TiltMaster** toolbar button
@@ -68,7 +85,9 @@ Advanced RF planning tools for telecommunication engineers. Perform vertical bea
 - **CSV/Excel**: Export optimization results
 - **JSON**: Export detailed analysis data
 
-## Requirements
+---
+
+## ⚙️ Requirements
 
 - QGIS 3.22 or higher
 - Python 3.7+
@@ -77,9 +96,6 @@ Advanced RF planning tools for telecommunication engineers. Perform vertical bea
 
 ### Installing PyQtGraph
 
-PyQtGraph is not included with QGIS by default. Install it using one of these methods:
-
-**Using pip (recommended):**
 ```bash
 pip install pyqtgraph
 
