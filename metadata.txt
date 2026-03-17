@@ -3,6 +3,7 @@ name=TiltMaster - RF Vertical Analysis
 description=Advanced RF Vertical Analysis and Tilt Optimization for Telecom Planning
 version=1.0.0
 qgisMinimumVersion=3.22
+pyqtgraphMinimumVersion=0.13.0
 author=Achmad Amrulloh
 email=achmad.amrulloh@gmail.com
 license=GPL v3
@@ -17,7 +18,7 @@ homepage=https://github.com/erlrich/tiltmaster-qgis
 repository=https://github.com/erlrich/tiltmaster-qgis
 tracker=https://github.com/erlrich/tiltmaster-qgis/issues
 
-icon=resources/icons/tiltmaster.svg
+icon=icon.png
 
 experimental=False
 deprecated=False

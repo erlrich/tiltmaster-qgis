@@ -258,38 +258,56 @@ class IntersectionSolver:
 
 
 # ======================================================
-# INTERSECTION CACHE (TAMBAHKAN DI AKHIR FILE)
+# INTERSECTION CACHE WITH LRU (FIXED - MEMORY SAFE)
 # ======================================================
+
+from collections import OrderedDict
 
 class IntersectionCache:
     """
-    Cache untuk hasil intersection berdasarkan total tilt
-    Memastikan total tilt yang sama menghasilkan hasil yang identik
+    Cache untuk hasil intersection dengan LRU eviction policy
+    Mencegah memory leak pada sesi panjang
     """
     _instance = None
-    _cache = {}
+    _cache = None
+    _maxsize = 200  # Batas maksimum entries
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
+            cls._instance._cache = OrderedDict()
         return cls._instance
     
     def get(self, key):
         """
-        Get cached intersection result
-        
-        Parameters
-        ----------
-        key : tuple
-            (distances_tuple, elevations_tuple, antenna_height, total_tilt)
+        Get cached intersection result dengan LRU update
         """
-        return self._cache.get(key)
+        if key in self._cache:
+            # Move to end (most recently used)
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
     
     def set(self, key, value):
-        """Set cached intersection result"""
+        """
+        Set cached intersection result dengan LRU eviction
+        """
         self._cache[key] = value
+        self._cache.move_to_end(key)
+        
+        # Evict oldest if exceeds maxsize
+        if len(self._cache) > self._maxsize:
+            self._cache.popitem(last=False)
+            print(f"🧹 LRU Cache: evicted oldest entry, size now {len(self._cache)}")
     
     def clear(self):
         """Clear cache"""
         self._cache.clear()
         print("🧹 Intersection cache cleared")
+    
+    def get_stats(self):
+        """Get cache statistics"""
+        return {
+            'size': len(self._cache),
+            'maxsize': self._maxsize
+        }

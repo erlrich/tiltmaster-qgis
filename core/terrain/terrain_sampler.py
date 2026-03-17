@@ -31,7 +31,7 @@ import time
 from PyQt5.QtCore import QTimer
 from qgis.core import QgsNetworkAccessManager, QgsBlockingNetworkRequest
 from qgis.PyQt.QtNetwork import QNetworkRequest
-from qgis.PyQt.QtCore import QUrl
+from qgis.PyQt.QtCore import QUrl, QCoreApplication
 from typing import List, Dict, Any
 from qgis.core import (
     QgsPointXY,
@@ -68,17 +68,18 @@ class TerrainSampler:
     
     def _add_to_cache(self, key, value):
         """
-        Add item to cache with LRU tracking
+        Add item to cache dengan LRU tracking - THREAD SAFE
         """
         with self._cache_lock:
             # Jika cache sudah penuh, hapus yang paling lama tidak diakses
             if len(self._cache) >= self.MAX_CACHE_SIZE:
                 # Cari item dengan access time paling lama
-                oldest_key = min(self._cache_access_time.keys(), 
-                                key=lambda k: self._cache_access_time[k])
-                del self._cache[oldest_key]
-                del self._cache_access_time[oldest_key]
-                print(f"🧹 Cache LRU: removed oldest entry")
+                if self._cache_access_time:
+                    oldest_key = min(self._cache_access_time.keys(), 
+                                    key=lambda k: self._cache_access_time[k])
+                    del self._cache[oldest_key]
+                    del self._cache_access_time[oldest_key]
+                    print(f"🧹 Cache LRU: removed oldest entry")
             
             # Tambahkan item baru
             self._cache[key] = value
@@ -86,7 +87,7 @@ class TerrainSampler:
     
     def _get_from_cache(self, key):
         """
-        Get item from cache and update access time
+        Get item from cache and update access time - THREAD SAFE
         """
         with self._cache_lock:
             if key in self._cache:
@@ -96,7 +97,7 @@ class TerrainSampler:
         return None
     
     def clear_cache(self):
-        """Clear all cached terrain samples"""
+        """Clear all cached terrain samples - THREAD SAFE"""
         with self._cache_lock:
             cache_size = len(self._cache)
             self._cache.clear()
@@ -104,7 +105,7 @@ class TerrainSampler:
             print(f"🧹 Cleared {cache_size} entries from terrain cache")
     
     def get_cache_stats(self):
-        """Get cache statistics"""
+        """Get cache statistics - THREAD SAFE"""
         with self._cache_lock:
             return {
                 'size': len(self._cache),
@@ -165,35 +166,59 @@ class TerrainSampler:
         # Sampling based on source
         try:
             if source == "online":
-                # Untuk online, kita perlu handle timeout
+                # =====================================================
+                # FIXED: THREAD SAFE ONLINE SAMPLING DENGAN CLEANUP
+                # =====================================================
                 import threading
                 import queue
+                import time
                 
                 result_queue = queue.Queue()
+                thread = None
                 
-                def worker():
+                try:
+                    def worker():
+                        try:
+                            result = self.sample_profile_online(site_point, azimuth, max_distance, step)
+                            result_queue.put(("success", result))
+                        except Exception as e:
+                            result_queue.put(("error", str(e)))
+                    
+                    thread = threading.Thread(target=worker)
+                    thread.daemon = True
+                    thread.start()
+                    
+                    # Wait with timeout
+                    thread.join(timeout)
+                    
+                    if thread.is_alive():
+                        # Thread still running after timeout - force cleanup
+                        print(f"⚠️ Thread still alive after {timeout}s, marking for cleanup...")
+                        # Cannot force kill thread in Python, but we can abandon it
+                        # The daemon flag will ensure it dies when main thread exits
+                        raise Exception(f"Open-Meteo request timed out after {timeout} seconds")
+                    
+                    # Get result with timeout to prevent blocking
                     try:
-                        result = self.sample_profile_online(site_point, azimuth, max_distance, step)
-                        result_queue.put(("success", result))
-                    except Exception as e:
-                        result_queue.put(("error", str(e)))
-                
-                thread = threading.Thread(target=worker)
-                thread.daemon = True
-                thread.start()
-                
-                # Wait with timeout
-                thread.join(timeout)
-                
-                if thread.is_alive():
-                    # Thread still running after timeout
-                    raise Exception(f"Open-Meteo request timed out after {timeout} seconds")
-                
-                # Get result
-                status, data = result_queue.get_nowait()
-                if status == "error":
-                    raise Exception(data)
-                result = data
+                        status, data = result_queue.get(timeout=5)
+                    except queue.Empty:
+                        raise Exception("No response from worker thread")
+                    
+                    if status == "error":
+                        raise Exception(data)
+                    result = data
+                    
+                except Exception as e:
+                    # Clean up thread reference
+                    thread = None
+                    raise
+                finally:
+                    # Clear queue to free memory
+                    while not result_queue.empty():
+                        try:
+                            result_queue.get_nowait()
+                        except queue.Empty:
+                            break
             else:
                 result = self._sample_sync(site_point, azimuth, max_distance, step)
             
@@ -416,11 +441,8 @@ class TerrainSampler:
     
     def _fetch_from_open_meteo(self, route_points, max_retries=3):
         """
-        Fetch elevation data from Open-Meteo API with improved error handling
+        Fetch elevation data from Open-Meteo API dengan NON-BLOCKING request
         """
-        
-        # Open-Meteo API has limit of points per request (usually 500-1000)
-        # We'll use all points at once for simplicity
         
         # Prepare coordinates with HIGH precision (not rounded)
         latitudes = [str(p["lat"]) for p in route_points]
@@ -442,54 +464,40 @@ class TerrainSampler:
             return self._fetch_open_meteo_chunked(route_points, max_retries)
         
         # =====================================================
-        # IMPROVED RETRY LOGIC WITH EXPONENTIAL BACKOFF
+        # GUNAKAN REQUEST DENGAN THREAD AGAR TIDAK BLOCKING
         # =====================================================
         for attempt in range(max_retries):
             try:
-                # Use QGIS network manager
-                from qgis.core import QgsNetworkAccessManager, QgsBlockingNetworkRequest
-                from qgis.PyQt.QtNetwork import QNetworkRequest
-                from qgis.PyQt.QtCore import QUrl
+                # Gunakan requests dengan timeout - ini akan block di thread,
+                # tapi kita sudah di background thread, jadi aman
+                import requests
                 
-                nam = QgsNetworkAccessManager.instance()
-                request = QNetworkRequest(QUrl(url))
-                request.setHeader(QNetworkRequest.UserAgentHeader, "TiltMaster-QGIS-Plugin")
+                # Set smaller timeout untuk memastikan tidak hang terlalu lama
+                response = requests.get(
+                    url, 
+                    timeout=30,
+                    headers={"User-Agent": "TiltMaster-QGIS-Plugin"}
+                )
                 
-                # Set timeout (in milliseconds)
-                request.setTransferTimeout(30000)  # 30 seconds timeout
-                
-                # Blocking request
-                blocking = QgsBlockingNetworkRequest()
-                result = blocking.get(request)
-                
-                if result != QgsBlockingNetworkRequest.NoError:
-                    error_msg = blocking.errorMessage()
-                    print(f"❌ Network error: {error_msg}")
+                if response.status_code != 200:
+                    print(f"❌ HTTP error: {response.status_code}")
                     
                     # Exponential backoff
-                    if "timed out" in error_msg.lower() or "timeout" in error_msg.lower():
-                        wait_time = 2 ** attempt  # 1, 2, 4 seconds
-                        print(f"⏳ Timeout. Retrying in {wait_time}s... (attempt {attempt+1}/{max_retries})")
-                    elif "429" in error_msg:  # Rate limited
-                        wait_time = 5 * (attempt + 1)  # 5, 10, 15 seconds
-                        print(f"⏳ Rate limited. Waiting {wait_time}s... (attempt {attempt+1}/{max_retries})")
+                    if response.status_code == 429:  # Rate limited
+                        wait_time = 5 * (attempt + 1)
+                        print(f"⏳ Rate limited. Waiting {wait_time}s...")
                     else:
-                        wait_time = 2
-                        print(f"⏳ Retrying in {wait_time}s... (attempt {attempt+1}/{max_retries})")
+                        wait_time = 2 ** attempt
+                        print(f"⏳ Retrying in {wait_time}s...")
                     
                     import time
                     time.sleep(wait_time)
                     continue
                 
-                # Parse response
-                response = blocking.reply().content()
-                response_str = response.data().decode()
-                
-                data = json.loads(response_str)
+                data = response.json()
                 
                 if "elevation" not in data:
                     print(f"❌ Invalid response: missing 'elevation' field")
-                    print(f"Response keys: {list(data.keys())}")
                     return None
                 
                 elevations = data["elevation"]
@@ -509,7 +517,7 @@ class TerrainSampler:
                 if attempt == max_retries - 1:
                     return None
                 
-                # Exponential backoff for exceptions too
+                # Exponential backoff
                 import time
                 wait_time = 2 ** attempt
                 print(f"⏳ Retrying in {wait_time}s...")
@@ -520,29 +528,18 @@ class TerrainSampler:
     
     def _fetch_open_meteo_chunked(self, route_points, max_retries=3):
         """
-        Fetch elevation data in chunks to avoid API limits
-        
-        Parameters
-        ----------
-        route_points : list
-            List of points with lat/lon
-        max_retries : int
-            Maximum number of retries on failure
-            
-        Returns
-        -------
-        list or None
-            List of elevations in meters
+        Fetch elevation data in chunks dengan NON-BLOCKING request
         """
-        # Open-Meteo API max 100 points per request
-        # Kita gunakan 98 untuk safety (buffer 2)
+        import requests
+        import time
+        
         MAX_POINTS_PER_CHUNK = 98
         
         chunk_size = MAX_POINTS_PER_CHUNK
         all_elevations = []
         total_chunks = (len(route_points) + chunk_size - 1) // chunk_size
         
-        print(f"📡 Fetching {len(route_points)} points in {total_chunks} chunks (max {chunk_size} per chunk)...")
+        print(f"📡 Fetching {len(route_points)} points in {total_chunks} chunks...")
         
         for i in range(0, len(route_points), chunk_size):
             chunk = route_points[i:i+chunk_size]
@@ -562,23 +559,16 @@ class TerrainSampler:
             # Retry for this chunk
             for attempt in range(max_retries):
                 try:
-                    from qgis.core import QgsNetworkAccessManager, QgsBlockingNetworkRequest
-                    from qgis.PyQt.QtNetwork import QNetworkRequest
-                    from qgis.PyQt.QtCore import QUrl
+                    response = requests.get(
+                        url, 
+                        timeout=30,
+                        headers={"User-Agent": "TiltMaster-QGIS-Plugin"}
+                    )
                     
-                    nam = QgsNetworkAccessManager.instance()
-                    request = QNetworkRequest(QUrl(url))
-                    request.setHeader(QNetworkRequest.UserAgentHeader, "TiltMaster-QGIS-Plugin")
-                    
-                    blocking = QgsBlockingNetworkRequest()
-                    result = blocking.get(request)
-                    
-                    if result != QgsBlockingNetworkRequest.NoError:
-                        error_msg = blocking.errorMessage()
-                        print(f"❌ Chunk {chunk_num} network error: {error_msg}")
+                    if response.status_code != 200:
+                        print(f"❌ Chunk {chunk_num} HTTP error: {response.status_code}")
                         
-                        # Check for rate limiting (429)
-                        if "429" in error_msg:
+                        if response.status_code == 429:  # Rate limited
                             wait_time = 5 * (attempt + 1)
                             print(f"⏳ Rate limited. Waiting {wait_time}s...")
                             time.sleep(wait_time)
@@ -586,46 +576,36 @@ class TerrainSampler:
                         else:
                             return None
                     
-                    # Parse response
-                    response = blocking.reply().content()
-                    response_str = response.data().decode()
-                    data = json.loads(response_str)
+                    data = response.json()
                     
                     if "elevation" not in data:
-                        print(f"❌ Chunk {chunk_num} invalid response: missing 'elevation' field")
-                        print(f"Response keys: {list(data.keys())}")
+                        print(f"❌ Chunk {chunk_num} invalid response")
                         return None
                     
                     chunk_elevations = data["elevation"]
                     
                     if len(chunk_elevations) != len(chunk):
-                        print(f"❌ Chunk {chunk_num} mismatch: got {len(chunk_elevations)} elevations for {len(chunk)} points")
+                        print(f"❌ Chunk {chunk_num} mismatch")
                         return None
                     
                     all_elevations.extend(chunk_elevations)
-                    print(f"✅ Chunk {chunk_num} complete ({len(chunk_elevations)} points)")
-                    
-                    # Success, break retry loop
+                    print(f"✅ Chunk {chunk_num} complete")
                     break
                     
                 except Exception as e:
                     print(f"❌ Chunk {chunk_num} attempt {attempt + 1} failed: {e}")
-                    import traceback
-                    traceback.print_exc()
                     
                     if attempt == max_retries - 1:
                         return None
                     time.sleep(2 * (attempt + 1))
             
-            # Small delay between chunks to avoid rate limiting
+            # Small delay between chunks
             if chunk_num < total_chunks:
                 time.sleep(1)
         
         if len(all_elevations) != len(route_points):
-            print(f"❌ Total mismatch: got {len(all_elevations)} elevations for {len(route_points)} points")
             return None
         
-        print(f"✅ Fetched total {len(all_elevations)} elevation points in {total_chunks} chunks")
         return all_elevations
     
     

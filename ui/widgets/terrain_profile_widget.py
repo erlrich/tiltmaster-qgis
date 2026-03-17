@@ -34,14 +34,96 @@ Menampilkan:
 
 import os
 import math
-import pyqtgraph as pg
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QFrame, QLabel  # <-- TAMBAHKAN QFrame, QLabel
+import traceback  # <-- TAMBAHKAN INI
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QFrame, QLabel, QMessageBox  # <-- TAMBAHKAN QMessageBox
 from PyQt5 import QtCore
 from PyQt5.QtGui import QLinearGradient, QColor, QBrush
 from .profile_legend_frame import ProfileLegendFrame
-from PyQt5.QtWidgets import QApplication  # Untuk processEvents
+from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer, QPointF, Qt
-from PyQt5.QtSvg import QGraphicsSvgItem
+
+# ======================================================
+# PYQTGRAPH IMPORT DENGAN GRACEFUL FALLBACK
+# ======================================================
+PYQTGRAPH_AVAILABLE = True
+PG_IMPORT_ERROR = None
+
+try:
+    import pyqtgraph as pg
+    from PyQt5.QtSvg import QGraphicsSvgItem
+except ImportError as e:
+    PYQTGRAPH_AVAILABLE = False
+    PG_IMPORT_ERROR = str(e)
+    print(f"⚠️ PyQtGraph tidak tersedia: {e}")
+    print("⚠️ TerrainProfileWidget akan menampilkan pesan error")
+    
+    # Buat dummy class untuk mencegah crash saat kompilasi
+    class DummyPg:
+        class PlotWidget:
+            def __init__(self, parent=None): 
+                self.plotItem = None
+            def setBackground(self, *args): pass
+            def showGrid(self, *args): pass
+            def setLabel(self, *args): pass
+            def setMouseEnabled(self, *args): pass
+            def getViewBox(self): return DummyViewBox()
+            def setClipToView(self, *args): pass
+            def setDownsampling(self, *args): pass
+            def setAntialiasing(self, *args): pass
+            def addItem(self, *args): pass
+            def enableAutoRange(self, *args): pass
+            def scene(self): return DummyScene()
+        
+        class DummyViewBox:
+            def setMouseMode(self, *args): pass
+            def setMouseEnabled(self, *args): pass
+            def enableAutoRange(self, *args): pass
+            def viewRange(self): return [[0,1000], [0,100]]
+            def height(self): return 400
+            def mapFromView(self, point): return QPointF(0,0)
+        
+        class DummyScene:
+            def sigMouseMoved(self): return DummySignal()
+        
+        class DummySignal:
+            def connect(self, *args): pass
+        
+        class mkPen:
+            def __new__(cls, *args, **kwargs): return None
+        
+        class InfiniteLine:
+            def __init__(self, *args, **kwargs): pass
+            def setZValue(self, *args): pass
+        
+        class TextItem:
+            def __init__(self, *args, **kwargs): pass
+            def setPos(self, *args): pass
+            def setZValue(self, *args): pass
+            def stackBefore(self, *args): pass
+        
+        class ScatterPlotItem:
+            def __init__(self, *args, **kwargs): pass
+            def setZValue(self, *args): pass
+        
+        class FillBetweenItem:
+            def __init__(self, *args, **kwargs): pass
+            def setZValue(self, *args): pass
+        
+        class LinearRegionItem:
+            def __init__(self, *args, **kwargs): pass
+            def setZValue(self, *args): pass
+        
+        class PlotDataItem:
+            def __init__(self, *args, **kwargs): pass
+        
+        class SignalProxy:
+            def __init__(self, *args, **kwargs): pass
+        
+        def mkBrush(*args, **kwargs): return None
+    
+    pg = DummyPg()
+    QGraphicsSvgItem = object
+
 
 
 class TerrainProfileWidget(QWidget):
@@ -65,6 +147,48 @@ class TerrainProfileWidget(QWidget):
         self.plot_item = None
 
         # ======================================================
+        # CEK KETERSEDIAAN PYQTGRAPH
+        # ======================================================
+        if not PYQTGRAPH_AVAILABLE:
+            error_label = QLabel(
+                f"<b>⚠️ PyQtGraph Tidak Terinstall</b><br><br>"
+                f"TiltMaster membutuhkan PyQtGraph untuk menampilkan terrain profile.<br><br>"
+                f"Install dengan perintah:<br>"
+ f"<code>pip install pyqtgraph</code><br><br>"
+                f"<small>Error: {PG_IMPORT_ERROR}</small>"
+            )
+            error_label.setWordWrap(True)
+            error_label.setStyleSheet("""
+                QLabel {
+                    color: #c1121f;
+                    background-color: #fff3f3;
+                    border: 2px solid #c1121f;
+                    border-radius: 8px;
+                    padding: 20px;
+                    margin: 10px;
+                    font-size: 11pt;
+                }
+                code {
+                    background-color: #f0f0f0;
+                    padding: 2px 5px;
+                    border-radius: 3px;
+                    font-family: monospace;
+                }
+            """)
+            error_label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(error_label)
+            
+            # Set dummy plot untuk mencegah error
+            self.plot = None
+            self.plot_item = None
+            self.vLine = None
+            self.hLine = None
+            self.proxy = None
+            
+            # Return early, jangan lanjutkan inisialisasi
+            return
+
+        # ======================================================
         # INIT PLOT WIDGET AFTER LAYOUT ATTACH
         # ======================================================
 
@@ -82,6 +206,11 @@ class TerrainProfileWidget(QWidget):
         
         self.plot.setClipToView(True)
         self.plot.setDownsampling(auto=True)
+        
+        # =====================================================
+        # FLAG UNTUK CEK STATUS DESTROY
+        # =====================================================
+        self._is_destroying = False
 
         # ======================================================
         # AXIS LABELS - AKAN DIUPDATE NANTI
@@ -207,6 +336,31 @@ class TerrainProfileWidget(QWidget):
         
         # Cache untuk binary search
         self._distances_array = None  # Akan di-update saat plot
+    
+    
+    def cleanup_timers(self):
+        """
+        Clean up timers to prevent QGIS hang on close
+        """
+        print("🧹 Cleaning up TerrainProfileWidget timers...")
+        
+        # =====================================================
+        # SET FLAG DESTROYING
+        # =====================================================
+        self._is_destroying = True
+        
+        # =====================================================
+        # DISCONNECT SIGNAL PROXY
+        # =====================================================
+        if hasattr(self, 'proxy') and self.proxy:
+            try:
+                # SignalProxy tidak memiliki method disconnect langsung,
+                # tapi kita bisa set ke None
+                self.proxy = None
+            except:
+                pass
+        
+        print("✅ TerrainProfileWidget timers cleaned up")
     
     
     def set_unit_system(self, is_metric):
@@ -468,7 +622,13 @@ class TerrainProfileWidget(QWidget):
         upper_beam_height=None,
         lower_beam_height=None
     ):
-
+        # ======================================================
+        # GUARD CLAUSE: Jika PyQtGraph tidak tersedia, return early
+        # ======================================================
+        if not PYQTGRAPH_AVAILABLE or self.plot is None or self.plot_item is None:
+            print("⚠️ TerrainProfileWidget: PyQtGraph tidak tersedia, plot_profile di-skip")
+            return
+        
         distances = list(distances)
         elevations = list(elevations)
 
@@ -1488,6 +1648,13 @@ class TerrainProfileWidget(QWidget):
         antenna_height : float
             Antenna height above ground (meters)
         """
+        
+        # ======================================================
+        # GUARD CLAUSE: Jika PyQtGraph tidak tersedia
+        # ======================================================
+        if not PYQTGRAPH_AVAILABLE or self.plot_item is None:
+            return
+            
         # Path ke file SVG
         svg_path = os.path.join(
             os.path.dirname(__file__), 
@@ -1630,15 +1797,45 @@ class TerrainProfileWidget(QWidget):
             import traceback
             traceback.print_exc()   
     
+    
     def _update_tower_scale(self):
         """Update tower scale when view changes (zoom/pan)"""
-        # Cek apakah _tower_params ada dan tidak None
+        
+        # ======================================================
+        # GUARD CLAUSE 1: Cek status destroying
+        # ======================================================
+        if hasattr(self, '_is_destroying') and self._is_destroying:
+            print("  ⏭️ _update_tower_scale skipped - widget is destroying")
+            return
+        
+        # ======================================================
+        # GUARD CLAUSE 2: Cek ketersediaan PyQtGraph
+        # ======================================================
+        if not PYQTGRAPH_AVAILABLE or self.plot_item is None:
+            return
+        
+        # ======================================================
+        # GUARD CLAUSE 3: Cek _tower_params
+        # ======================================================
         if not hasattr(self, '_tower_params') or self._tower_params is None:
             return
             
         # Cek apakah _tower_params memiliki 3 nilai
         if len(self._tower_params) != 3:
             print(f"⚠️ _tower_params has wrong length: {len(self._tower_params)}")
+            return
+        
+        # ======================================================
+        # CEK APAKAH VIEWBOX MASIH VALID
+        # ======================================================
+        try:
+            viewbox = self.plot_item.getViewBox()
+            if viewbox is None:
+                print("⚠️ ViewBox is None, skipping tower update")
+                return
+        except RuntimeError:
+            # C++ object already deleted
+            print("⚠️ ViewBox already deleted, skipping tower update")
             return
             
         try:
@@ -1650,8 +1847,16 @@ class TerrainProfileWidget(QWidget):
             # Gambar ulang dengan scale baru
             self._draw_svg_tower(site_ground, antenna_abs, antenna_height)
             
+        except RuntimeError as e:
+            # C++ object already deleted - ini yang sering cause crash
+            print(f"⚠️ RuntimeError in _update_tower_scale (C++ object deleted): {e}")
+            self._tower_item = None
+            self._tower_params = None
+            
         except Exception as e:
             print(f"⚠️ Error in _update_tower_scale: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _remove_tower(self):
         """Remove existing tower item from scene"""
@@ -1698,64 +1903,89 @@ class TerrainProfileWidget(QWidget):
     def _mouse_moved(self, evt):
         """Mouse moved event dengan binary search untuk performa"""
         
+        # ======================================================
+        # GUARD CLAUSE 1: Cek status destroying
+        # ======================================================
+        if hasattr(self, '_is_destroying') and self._is_destroying:
+            return
+        
+        # ======================================================
+        # GUARD CLAUSE 2: Jika PyQtGraph tidak tersedia
+        # ======================================================
+        if not PYQTGRAPH_AVAILABLE or self.plot is None:
+            return
+        
+        # ======================================================
+        # GUARD CLAUSE 3: Cek data availability
+        # ======================================================
         if not self._distances or len(self._distances) == 0:
             return
-
-        pos = evt[0]
-        vb = self.plot.getViewBox()
         
-        if not vb or not vb.sceneBoundingRect().contains(pos):
+        # ======================================================
+        # GUARD CLAUSE 4: Cek viewbox validity
+        # ======================================================
+        try:
+            vb = self.plot.getViewBox()
+            if vb is None:
+                return
+        except RuntimeError:
+            # C++ object already deleted
             return
 
-        mousePoint = vb.mapSceneToView(pos)
+        # ======================================================
+        # CEK APAKAH POSISI MOUSE DI DALAM VIEW
+        # ======================================================
+        pos = evt[0]
+        try:
+            if not vb.sceneBoundingRect().contains(pos):
+                return
+        except RuntimeError:
+            return
+
+        # ======================================================
+        # KONVERSI KE KOORDINAT VIEW
+        # ======================================================
+        try:
+            mousePoint = vb.mapSceneToView(pos)
+        except RuntimeError:
+            return
+            
         x = mousePoint.x()
         
-        # Binary search untuk jarak terdekat (O(log n) instead of O(n))
+        # Validasi x tidak infinite atau NaN
+        if not math.isfinite(x):
+            return
+        
+        # ======================================================
+        # BINARY SEARCH UNTUK JARAK TERDEKAT
+        # ======================================================
         import bisect
         idx = bisect.bisect_left(self._distances, x)
         
-        # Handle boundary cases
-        if idx == 0:
-            d = self._distances[0]
-            terrain = self._terrain[0]
-            # Cek tipe self._beam
-            if isinstance(self._beam, tuple) and len(self._beam) == 2:
-                # self._beam berisi (main_x, main_y)
-                main_x, main_y = self._beam
-                # Cari beam height di jarak terdekat
-                if len(main_x) > 0:
-                    # Cari index terdekat di main_x
-                    beam_idx = min(range(len(main_x)), key=lambda i: abs(main_x[i] - d))
-                    beam = main_y[beam_idx]
+        # Handle boundary cases dengan safe access
+        try:
+            if idx == 0:
+                d = self._distances[0]
+                terrain = self._terrain[0]
+                # Cek tipe self._beam
+                if isinstance(self._beam, tuple) and len(self._beam) == 2:
+                    # self._beam berisi (main_x, main_y)
+                    main_x, main_y = self._beam
+                    # Cari beam height di jarak terdekat
+                    if len(main_x) > 0:
+                        # Cari index terdekat di main_x
+                        beam_idx = min(range(len(main_x)), key=lambda i: abs(main_x[i] - d))
+                        beam = main_y[beam_idx]
+                    else:
+                        beam = 0
                 else:
-                    beam = 0
-            else:
-                # Fallback ke list biasa
-                beam = self._beam[0] if len(self._beam) > 0 else 0
-                
-        elif idx == len(self._distances):
-            d = self._distances[-1]
-            terrain = self._terrain[-1]
-            # Cek tipe self._beam
-            if isinstance(self._beam, tuple) and len(self._beam) == 2:
-                main_x, main_y = self._beam
-                if len(main_x) > 0:
-                    beam_idx = min(range(len(main_x)), key=lambda i: abs(main_x[i] - d))
-                    beam = main_y[beam_idx]
-                else:
-                    beam = 0
-            else:
-                beam = self._beam[-1] if len(self._beam) > 0 else 0
-                
-        else:
-            # Cek mana yang lebih dekat
-            left_dist = abs(self._distances[idx-1] - x)
-            right_dist = abs(self._distances[idx] - x)
-            
-            if left_dist < right_dist:
-                d = self._distances[idx-1]
-                terrain = self._terrain[idx-1]
-                # Cari beam height
+                    # Fallback ke list biasa
+                    beam = self._beam[0] if len(self._beam) > 0 else 0
+                    
+            elif idx == len(self._distances):
+                d = self._distances[-1]
+                terrain = self._terrain[-1]
+                # Cek tipe self._beam
                 if isinstance(self._beam, tuple) and len(self._beam) == 2:
                     main_x, main_y = self._beam
                     if len(main_x) > 0:
@@ -1764,67 +1994,108 @@ class TerrainProfileWidget(QWidget):
                     else:
                         beam = 0
                 else:
-                    beam = self._beam[idx-1] if idx-1 < len(self._beam) else 0
+                    beam = self._beam[-1] if len(self._beam) > 0 else 0
+                    
             else:
-                d = self._distances[idx]
-                terrain = self._terrain[idx]
-                if isinstance(self._beam, tuple) and len(self._beam) == 2:
-                    main_x, main_y = self._beam
-                    if len(main_x) > 0:
-                        beam_idx = min(range(len(main_x)), key=lambda i: abs(main_x[i] - d))
-                        beam = main_y[beam_idx]
+                # Cek mana yang lebih dekat
+                left_dist = abs(self._distances[idx-1] - x)
+                right_dist = abs(self._distances[idx] - x)
+                
+                if left_dist < right_dist:
+                    d = self._distances[idx-1]
+                    terrain = self._terrain[idx-1]
+                    # Cari beam height
+                    if isinstance(self._beam, tuple) and len(self._beam) == 2:
+                        main_x, main_y = self._beam
+                        if len(main_x) > 0:
+                            beam_idx = min(range(len(main_x)), key=lambda i: abs(main_x[i] - d))
+                            beam = main_y[beam_idx]
+                        else:
+                            beam = 0
                     else:
-                        beam = 0
+                        beam = self._beam[idx-1] if idx-1 < len(self._beam) else 0
                 else:
-                    beam = self._beam[idx] if idx < len(self._beam) else 0
+                    d = self._distances[idx]
+                    terrain = self._terrain[idx]
+                    if isinstance(self._beam, tuple) and len(self._beam) == 2:
+                        main_x, main_y = self._beam
+                        if len(main_x) > 0:
+                            beam_idx = min(range(len(main_x)), key=lambda i: abs(main_x[i] - d))
+                            beam = main_y[beam_idx]
+                        else:
+                            beam = 0
+                    else:
+                        beam = self._beam[idx] if idx < len(self._beam) else 0
+        except (IndexError, ValueError) as e:
+            # Safety catch untuk index errors
+            print(f"⚠️ Error in mouse moved index calculation: {e}")
+            return
 
+        # ======================================================
+        # VALIDASI NILAI
+        # ======================================================
+        if not all(math.isfinite(v) for v in [d, terrain, beam]):
+            return
+            
         clearance = beam - terrain
 
-        # Update crosshair
-        self.vLine.setPos(d)
-        self.hLine.setPos(mousePoint.y())
+        # ======================================================
+        # UPDATE CROSSHAIR DENGAN SAFE CHECK
+        # ======================================================
+        try:
+            self.vLine.setPos(d)
+            self.hLine.setPos(mousePoint.y())
+        except RuntimeError:
+            # C++ object already deleted
+            return
 
-
+        # ======================================================
         # AKTIFKAN TOOLTIP
+        # ======================================================
         # Tentukan unit system
         is_metric = getattr(self, '_axis_units', 'metric') == 'metric'
 
-        if is_metric:
-            # Metric units
-            text = (
-                f"📍 Distance: {d:.0f} m\n"
-                f"⛰️ Terrain: {terrain:.1f} m\n"
-                f"📡 Beam: {beam:.1f} m\n"
-                f"✨ Clearance: {clearance:.1f} m"
-            )
-        else:
-            # Imperial units - FIXED VERSION
-            d_ft = d * 3.28084
-            terrain_ft = terrain * 3.28084
-            beam_ft = beam * 3.28084
-            clearance_ft = clearance * 3.28084
-            
-            # Format distance with proper unit
-            if d_ft >= 5280:
-                d_str = f"{d_ft/5280:.2f} mi"
+        try:
+            if is_metric:
+                # Metric units
+                text = (
+                    f"📍 Distance: {d:.0f} m\n"
+                    f"⛰️ Terrain: {terrain:.1f} m\n"
+                    f"📡 Beam: {beam:.1f} m\n"
+                    f"✨ Clearance: {clearance:.1f} m"
+                )
             else:
-                d_str = f"{d_ft:.0f} ft"
+                # Imperial units - FIXED VERSION
+                d_ft = d * 3.28084
+                terrain_ft = terrain * 3.28084
+                beam_ft = beam * 3.28084
+                clearance_ft = clearance * 3.28084
+                
+                # Format distance with proper unit
+                if d_ft >= 5280:
+                    d_str = f"{d_ft/5280:.2f} mi"
+                else:
+                    d_str = f"{d_ft:.0f} ft"
+                
+                # Format terrain, beam, clearance
+                # Gunakan rounding yang konsisten
+                terrain_str = f"{terrain_ft:.0f}" if terrain_ft < 1000 else f"{terrain_ft:.1f}"
+                beam_str = f"{beam_ft:.0f}" if beam_ft < 1000 else f"{beam_ft:.1f}"
+                clearance_str = f"{clearance_ft:.0f}" if abs(clearance_ft) < 1000 else f"{clearance_ft:.1f}"
+                
+                text = (
+                    f"📍 Distance: {d_str}\n"
+                    f"⛰️ Terrain: {terrain_str} ft\n"
+                    f"📡 Beam: {beam_str} ft\n"
+                    f"✨ Clearance: {clearance_str} ft"
+                )
             
-            # Format terrain, beam, clearance
-            # Gunakan rounding yang konsisten
-            terrain_str = f"{terrain_ft:.0f}" if terrain_ft < 1000 else f"{terrain_ft:.1f}"
-            beam_str = f"{beam_ft:.0f}" if beam_ft < 1000 else f"{beam_ft:.1f}"
-            clearance_str = f"{clearance_ft:.0f}" if abs(clearance_ft) < 1000 else f"{clearance_ft:.1f}"
+            self.setToolTip(text)
             
-            text = (
-                f"📍 Distance: {d_str}\n"
-                f"⛰️ Terrain: {terrain_str} ft\n"
-                f"📡 Beam: {beam_str} ft\n"
-                f"✨ Clearance: {clearance_str} ft"
-            )
-        
-        self.setToolTip(text)
-        
+        except Exception as e:
+            # Jangan crash hanya karena tooltip error
+            print(f"⚠️ Error setting tooltip: {e}")
+    
     # ======================================================
     # GET IMPACT POINT (BARU)
     # ======================================================

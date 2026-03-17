@@ -67,7 +67,8 @@ class VerticalAnalysisEngine:
         beamwidth,
         max_distance=RFDefaults.MAX_DISTANCE,
         step=RFDefaults.SAMPLING_STEP,
-        dem_source="local"
+        dem_source="local",
+        timeout=45  # <-- TAMBAHKAN PARAMETER INI
     ):
         """
         Run vertical RF analysis pipeline.
@@ -128,8 +129,8 @@ class VerticalAnalysisEngine:
                 azimuth,
                 max_distance,
                 step,
-                source=dem_source,  # PARAMETER BARU
-                timeout=45  # <-- TAMBAHKAN TIMEOUT 45 DETIK UNTUK ONLINE
+                source=dem_source,
+                timeout=timeout  # <-- GUNAKAN PARAMETER INI
             )
         except Exception as e:
             error_msg = str(e)

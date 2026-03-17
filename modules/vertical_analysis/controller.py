@@ -188,8 +188,30 @@ class VerticalAnalysisController:
     # ======================================================
 
     def run_analysis(self, params):
-
+        """
+        Run RF analysis with parameters from UI
+        
+        Parameters
+        ----------
+        params : dict
+            Dictionary containing:
+            - height: antenna height in meters
+            - mech: mechanical tilt in degrees
+            - elec: electrical tilt in degrees
+            - beamwidth: vertical beamwidth in degrees
+            - azimuth: azimuth in degrees
+            - distance: max distance in meters
+            - lat: latitude (optional, uses map center if None)
+            - lon: longitude (optional, uses map center if None)
+            - dem_source: 0=local, 1=online
+            
+        Returns
+        -------
+        dict
+            Analysis results from engine
+        """
         from qgis.core import QgsPointXY
+        import time
 
         # ======================================================
         # GET PARAMETERS
@@ -202,6 +224,29 @@ class VerticalAnalysisController:
         azimuth = params.get("azimuth")
         max_distance = params.get("distance", 5000)
 
+        # Validasi parameter kritis
+        if antenna_height is None or antenna_height <= 0:
+            raise ValueError("Antenna height must be positive")
+        
+        if mech_tilt is None:
+            raise ValueError("Mechanical tilt is required")
+            
+        if elec_tilt is None:
+            raise ValueError("Electrical tilt is required")
+
+        # ======================================================
+        # CEK DEM SOURCE DAN SET TIMEOUT
+        # ======================================================
+        dem_source = params.get("dem_source", 0)
+        source = "online" if dem_source == 1 else "local"
+        
+        # Set timeout berbeda untuk online vs local
+        if source == "online":
+            print("🌐 Using Open-Meteo online source - this may take a few seconds...")
+            timeout = 45  # 45 detik untuk online
+        else:
+            timeout = 30  # 30 detik untuk local
+
         # ======================================================
         # GET SITE FROM PARAMS (UI)
         # ======================================================
@@ -210,48 +255,65 @@ class VerticalAnalysisController:
         lon = params.get("lon")
 
         if lat is None or lon is None:
-
             from qgis.utils import iface
-
             canvas = iface.mapCanvas()
-
             center = canvas.extent().center()
-
             site_point = QgsPointXY(center.x(), center.y())
-
+            print(f"📍 Using map center: ({center.y():.6f}, {center.x():.6f})")
         else:
-
             site_point = QgsPointXY(lon, lat)
+            print(f"📍 Using provided coordinates: ({lat:.6f}, {lon:.6f})")
 
         # ======================================================
-        # RUN ENGINE
+        # RUN ENGINE DENGAN TIMEOUT
         # ======================================================
-
-        # Ambil source dari params (default "local")
-        dem_source = params.get("dem_source", 0)
-        source = "online" if dem_source == 1 else "local"
         
-        result = self.engine.run(
-            site_point=site_point,
-            azimuth=azimuth,
-            antenna_height=antenna_height,
-            mech_tilt=mech_tilt,
-            elec_tilt=elec_tilt,
-            beamwidth=beamwidth,
-            max_distance=max_distance,
-            dem_source=source  # PARAMETER BARU
-        )
+        start_time = time.time()
+        print(f"⏱️ Starting engine run at {time.strftime('%H:%M:%S')}")
+        
+        try:
+            result = self.engine.run(
+                site_point=site_point,
+                azimuth=azimuth,
+                antenna_height=antenna_height,
+                mech_tilt=mech_tilt,
+                elec_tilt=elec_tilt,
+                beamwidth=beamwidth,
+                max_distance=max_distance,
+                dem_source=source,
+                timeout=timeout  # PARAMETER TIMEOUT
+            )
+            
+            elapsed = time.time() - start_time
+            print(f"⏱️ Engine run completed in {elapsed:.1f} seconds")
+            
+        except Exception as e:
+            elapsed = time.time() - start_time
+            print(f"❌ Engine run failed after {elapsed:.1f} seconds: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Return error object instead of raising
+            return {
+                "error": True,
+                "error_message": str(e),
+                "source": source,
+                "distances": [],
+                "elevations": [],
+                "main_beam": None,
+                "upper_beam": None,
+                "lower_beam": None,
+                "impact_distance": None,
+                "impact_point": None,
+                "footprint_start_distance": None,
+                "footprint_end_distance": None
+            }
 
         # ======================================================
         # MAP RENDERING DISABLED (Handled by UI widget)
         # ======================================================
-
-        # Rendering sector footprint sekarang dilakukan oleh
-        # SectorMapWidget di vertical_analysis_dialog.py
-        # agar layer hanya muncul di embedded plugin canvas,
-        # bukan di main QGIS canvas.
-
-        pass
+        # Rendering sector footprint dilakukan oleh SectorMapWidget
+        # di vertical_analysis_dialog.py agar layer hanya muncul
+        # di embedded plugin canvas, bukan di main QGIS canvas.
         
-            
         return result

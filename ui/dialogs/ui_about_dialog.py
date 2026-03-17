@@ -18,117 +18,58 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from qgis.PyQt.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
-from qgis.PyQt.QtGui import QFont
-from qgis.PyQt.QtCore import Qt
+import os
+import webbrowser
+
+from qgis.PyQt import uic
+from qgis.PyQt.QtWidgets import QDialog, QMessageBox
+from qgis.PyQt.QtCore import QUrl
+from qgis.PyQt.QtGui import QDesktopServices
+
+# Load the UI file
+FORM_CLASS, _ = uic.loadUiType(os.path.join(
+    os.path.dirname(__file__), 'about_dialog_base.ui'))
 
 
-class TiltMasterAboutDialog(QDialog):
+class TiltMasterAboutDialog(QDialog, FORM_CLASS):
     """
     About dialog for TiltMaster - RF Vertical Analysis plugin
+    Dengan opsi donasi Buy Me a Coffee (internasional) dan Saweria (Indonesia)
     """
     
     def __init__(self, parent=None):
-        super().__init__(parent)
+        """Constructor."""
+        super(TiltMasterAboutDialog, self).__init__(parent)
+        self.setupUi(self)
+        
+        # Connect donate button
+        self.donateButton.clicked.connect(self._show_donation_options)
+        
+        # Set window title
         self.setWindowTitle("About TiltMaster")
-        self.setFixedWidth(460)
-        self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(20, 20, 20, 20)
-
-        # Title
-        title = QLabel("TiltMaster")
-        title.setFont(QFont("Arial", 18, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("color: #0c6075; margin-bottom: 4px;")
-
-        # Subtitle
-        subtitle = QLabel("RF Vertical Analysis for QGIS")
-        subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setStyleSheet("color: #2c5a6b; font-size: 12px; margin-bottom: 8px;")
-
-        # Version
-        version = QLabel("Version 1.0.0")
-        version.setAlignment(Qt.AlignCenter)
-        version.setStyleSheet("color: #5f7a84; font-size: 11px; font-weight: bold; margin-bottom: 12px;")
-
-        # Description
-        description = QLabel(
-            "Advanced RF planning tools for telecommunication engineers.\n\n"
-            "Features:\n"
-            "• Vertical beam analysis with terrain profiling\n"
-            "• Beam intersection detection and coverage footprint\n"
-            "• Tilt optimizer with 3 optimization modes\n"
-            "• Dual unit support (Metric/Imperial)\n"
-            "• Embedded map canvas with OSM basemap\n"
-            "• KMZ export for Google Earth\n"
-            "• Results export to CSV, Excel, and JSON"
+    
+    def _show_donation_options(self):
+        """Show donation options dialog"""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Support TiltMaster")
+        msg.setText(
+            "If TiltMaster has been helpful in your work, consider supporting its continued development:\n\n"
+            "🌐 International: Buy Me a Coffee\n"
+            "   https://buymeacoffee.com/achmad.amrulloh\n\n"
+            "🇮🇩 Indonesia: Saweria\n"
+            "   https://saweria.co/achmadamrulloh\n\n"
+            "Choose your preferred platform below."
         )
-        description.setAlignment(Qt.AlignLeft)
-        description.setWordWrap(True)
-        description.setStyleSheet("margin-top: 10px; margin-bottom: 10px; line-height: 1.4;")
-
-        # Separator line
-        separator = QLabel("")
-        separator.setFixedHeight(1)
-        separator.setStyleSheet("background-color: #c9d9e0; margin: 8px 0;")
-
-        # Author info
-        author = QLabel(
-            "Author  : Achmad Amrulloh\n"
-            "Email   : achmad.amrulloh@gmail.com\n"
-            "LinkedIn: https://www.linkedin.com/in/achmad-amrulloh/\n"
-            "GitHub  : https://github.com/erlrich/tiltmaster-qgis"
-        )
-        author.setAlignment(Qt.AlignLeft)
-        author.setStyleSheet("color: #2c5a6b; font-size: 10px; margin-top: 5px;")
-        author.setOpenExternalLinks(True)
-
-        # License
-        license_text = QLabel(
-            "© 2026 Achmad Amrulloh\n\n"
-            "This program is free software: you can redistribute it and/or modify "
-            "it under the terms of the GNU General Public License as published by "
-            "the Free Software Foundation, either version 3 of the License, or "
-            "(at your option) any later version.\n\n"
-            "This program is distributed in the hope that it will be useful, "
-            "but WITHOUT ANY WARRANTY; without even the implied warranty of "
-            "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the "
-            "GNU General Public License for more details.\n\n"
-            "You should have received a copy of the GNU General Public License "
-            "along with this program. If not, see <https://www.gnu.org/licenses/>."
-        )
-        license_text.setAlignment(Qt.AlignCenter)
-        license_text.setWordWrap(True)
-        license_text.setStyleSheet("color: #5f7a84; font-size: 9px; margin-top: 10px;")
-
-        # OK Button
-        btn = QPushButton("OK")
-        btn.setFixedWidth(100)
-        btn.setMinimumHeight(30)
-        btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0c6075;
-                color: white;
-                border-radius: 4px;
-                padding: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #094e60;
-            }
-        """)
-        btn.clicked.connect(self.accept)
-
-        # Add all widgets to layout
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-        layout.addWidget(version)
-        layout.addWidget(description)
-        layout.addWidget(separator)
-        layout.addWidget(author)
-        layout.addWidget(license_text)
-        layout.addStretch()
-        layout.addWidget(btn, 0, Qt.AlignCenter)
+        msg.setStandardButtons(QMessageBox.NoButton)
+        
+        # Create custom buttons
+        bmac_btn = msg.addButton("🌐 Buy Me a Coffee", QMessageBox.ActionRole)
+        saweria_btn = msg.addButton("🇮🇩 Saweria", QMessageBox.ActionRole)
+        cancel_btn = msg.addButton("Close", QMessageBox.RejectRole)
+        
+        msg.exec_()
+        
+        if msg.clickedButton() == bmac_btn:
+            QDesktopServices.openUrl(QUrl("https://buymeacoffee.com/achmad.amrulloh"))
+        elif msg.clickedButton() == saweria_btn:
+            QDesktopServices.openUrl(QUrl("https://saweria.co/achmadamrulloh"))

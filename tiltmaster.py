@@ -51,7 +51,7 @@ class TiltMaster:
             self.plugin_dir,
             'resources',
             'icons',
-            'tiltmaster.svg'
+            'tiltmaster.png'
         )
 
         # Create action for main analysis
@@ -60,7 +60,17 @@ class TiltMaster:
             'TiltMaster - RF Vertical Analysis',
             self.iface.mainWindow()
         )
-
+        
+        self.action_vertical_analysis.setToolTip(
+            "TiltMaster - RF Vertical Analysis\n"
+            "Click to open analysis dialog\n"
+            "☕ Support: buymeacoffee.com/achmad.amrulloh"
+        )
+        
+        self.action_vertical_analysis.setStatusTip(
+            "TiltMaster - RF Vertical Analysis | Support: buymeacoffee.com/achmad.amrulloh"
+        )
+        
         # Connect signal
         self.action_vertical_analysis.triggered.connect(
             self.run_vertical_analysis
@@ -81,7 +91,7 @@ class TiltMaster:
             self.plugin_dir,
             'resources',
             'icons',
-            'information.svg'
+            'information.png'
         )
         
         # Create about action with icon

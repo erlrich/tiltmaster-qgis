@@ -60,7 +60,13 @@ class SectorMapWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-
+        
+        # ======================================================
+        # FLAG UNTUK CEK STATUS DESTROY (HARUS PALING ATAS)
+        # ======================================================
+        self._is_destroying = False
+        self._flash_timer_running = False
+        
         layout = QVBoxLayout()
         self.setLayout(layout)
 
@@ -284,16 +290,24 @@ class SectorMapWidget(QWidget):
     def _ensure_overlay_on_top(self):
         """
         Ensure overlay is on top after canvas is fully loaded
-        Dipanggil dengan timer delay
+        ONLY execute if widget is not being destroyed
         """
+        # =====================================================
+        # GUARD CLAUSE: Jangan eksekusi jika widget sedang di-destroy
+        # =====================================================
+        if hasattr(self, '_is_destroying') and self._is_destroying:
+            print("  ⏭️ Skipping _ensure_overlay_on_top - widget is destroying")
+            return
+            
         if hasattr(self, 'metrics_frame'):
-            # ===== PASTIKAN VISIBLE =====
-            self.metrics_frame.setVisible(True)
-            self.metrics_frame.show()
-            self.metrics_frame.raise_()
-            print(f"✅ Metrics overlay raised and visible (delayed) - Visible: {self.metrics_frame.isVisible()}")
+            # Cek apakah frame masih valid (masih bagian dari widget)
+            if self.metrics_frame and not self._is_destroying:
+                self.metrics_frame.setVisible(True)
+                self.metrics_frame.show()
+                self.metrics_frame.raise_()
+                print(f"✅ Metrics overlay raised and visible (delayed) - Visible: {self.metrics_frame.isVisible()}")
         
-        if hasattr(self, 'legend_frame'):
+        if hasattr(self, 'legend_frame') and self.legend_frame and not self._is_destroying:
             self.legend_frame.raise_()
     
     def hide_metrics(self):
@@ -1928,11 +1942,18 @@ class SectorMapWidget(QWidget):
         self._schedule_next_flash(interval)
     
     def _schedule_next_flash(self, interval):
-        """Schedule flash step berikutnya"""
+        """Schedule flash step berikutnya dengan safe checking"""
+        
+        # =====================================================
+        # GUARD CLAUSE: Jangan lanjut jika widget sedang di-destroy
+        # =====================================================
+        if hasattr(self, '_is_destroying') and self._is_destroying:
+            print("  ⏭️ Flash cancelled - widget is destroying")
+            self._cleanup_flash_timer()
+            return
+            
         if not hasattr(self, '_flash_timer_running') or not self._flash_timer_running:
             return
-        
-        from PyQt5.QtCore import QTimer
         
         # Validasi layer masih ada
         if not self._impact_layer or not self._impact_layer.isValid():
@@ -1983,8 +2004,24 @@ class SectorMapWidget(QWidget):
             self._cleanup_flash_timer()
             return
         
-        # Schedule next flash
-        QTimer.singleShot(interval, lambda: self._schedule_next_flash(interval))
+        # =====================================================
+        # SCHEDULE NEXT FLASH DENGAN SAFE LAMBDA
+        # =====================================================
+        # Gunakan lambda yang mengecek status destroy
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(interval, lambda: self._safe_schedule_next_flash(interval))
+    
+    def _safe_schedule_next_flash(self, interval):
+        """
+        Safe wrapper untuk schedule next flash
+        Mengecek status destroy sebelum lanjut
+        """
+        if hasattr(self, '_is_destroying') and self._is_destroying:
+            print("  ⏭️ Safe flash skipped - widget is destroying")
+            return
+        self._schedule_next_flash(interval)
+    
+    
     
     def _cleanup_flash_timer(self):
         """Cleanup flash timer"""
@@ -2009,10 +2046,22 @@ class SectorMapWidget(QWidget):
             pass
     
     def closeEvent(self, event):
-        """Cleanup saat widget ditutup"""
-        print("🚪 SectorMapWidget closing")
-        self._cleanup_flash_timer()
-        super().closeEvent(event)   
+        """
+        Clean up resources when widget is closed
+        """
+        print("🚪 SectorMapWidget closeEvent")
+        
+        # Set flag destroying
+        self._is_destroying = True
+        
+        # Cleanup timers
+        self.cleanup_timers()
+        
+        # Clear all layers
+        self.clear_all_layers()
+        
+        # Accept the close event
+        event.accept()
     
     
     def hide_all_layers(self):

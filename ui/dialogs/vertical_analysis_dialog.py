@@ -56,11 +56,15 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QCheckBox,
     QLineEdit,
+    QSizePolicy,
+    QSplitter,
     QProgressBar,
     QTabWidget,  # <-- TAMBAHKAN INI
     QGroupBox,   # <-- TAMBAHKAN INI (untuk konsistensi)
     QSpinBox     # <-- TAMBAHKAN INI (untuk DualHandleSlider)
 )
+
+
 
 from PyQt5 import QtCore
 from qgis.utils import iface
@@ -1244,11 +1248,16 @@ class OptimizeWorker(QObject):
         self._is_cancelled = True
 
 
+
 class VerticalAnalysisDialog(QDialog):
 
     def __init__(self, controller=None, parent=None):
 
         super().__init__(parent)
+        # =====================================================
+        # FLAG UNTUK CEK STATUS DESTROY
+        # =====================================================
+        self._is_destroying = False
 
         self.controller = controller
 
@@ -1408,7 +1417,8 @@ class VerticalAnalysisDialog(QDialog):
         # Buat scroll area terlebih dahulu
         self.input_scroll = QScrollArea()
         self.input_scroll.setWidgetResizable(True)
-        self.input_scroll.setFixedWidth(340)  # <-- SAMA DENGAN CARD
+        self.input_scroll.setMinimumWidth(360)
+        self.input_scroll.setMaximumWidth(420)
         self.input_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.input_scroll.setStyleSheet("""
             QScrollArea {
@@ -2140,7 +2150,7 @@ class VerticalAnalysisDialog(QDialog):
         # RIGHT COLUMN
         # =====================================================
 
-        right_column = QVBoxLayout()
+        right_splitter = QSplitter(Qt.Vertical)
 
         # -----------------------------------------------------
         # PROFILE CARD
@@ -2220,13 +2230,19 @@ class VerticalAnalysisDialog(QDialog):
 
         # Map widget
         self.map_widget = SectorMapWidget()
-        self.map_widget.setMinimumHeight(350)
+
+        # Allow layout to control size instead of forcing minimum height
+        self.map_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         map_layout.addWidget(self.map_widget)
 
         # Status label (tetap di bawah)
         self.status_label = QLabel("Ready")
         self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet("color: #2c5a6b; font-size: 10px; padding: 5px;")
+        self.status_label.setOpenExternalLinks(True)  # <-- TAMBAHKAN INI
+        self.status_label.setStyleSheet("color: #2c5a6b; font-size: 12px; padding: 6px;")  # 10px → 12px
+        self.status_label.setMinimumHeight(20)  # Tambah tinggi agar tidak sempit
+        self.status_label.setWordWrap(True)     # Wrap text jika terlalu panjang
         map_layout.addWidget(self.status_label)
         
         
@@ -2240,11 +2256,34 @@ class VerticalAnalysisDialog(QDialog):
         # ADD LAYOUT
         # =====================================================
 
-        right_column.addWidget(profile_card,1)
-        right_column.addWidget(map_card,1)
+        right_splitter.addWidget(profile_card)
+        right_splitter.addWidget(map_card)
 
-        main_layout.addWidget(inputs_card)
-        main_layout.addLayout(right_column,1)
+        # Default split 50:50
+        right_splitter.setSizes([400,400])
+
+        # UX improvement
+        right_splitter.setHandleWidth(6)
+        right_splitter.setChildrenCollapsible(False)
+        
+        # auto refresh matplotlib when splitter moved
+        right_splitter.splitterMoved.connect(self._refresh_profile_plot)
+
+
+        profile_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        map_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.profile_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.map_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        # =====================================================
+        # FIX: USE SCROLL AREA FOR INPUT PANEL
+        # =====================================================
+        # sebelumnya inputs_card langsung dimasukkan ke layout
+        # sehingga scroll tidak pernah muncul pada layar kecil
+
+        main_layout.addWidget(self.input_scroll)
+        main_layout.addWidget(right_splitter,1)
 
         # =====================================================
         # SIGNALS - FIXED (TANPA INFINITE LOOP)
@@ -2401,18 +2440,67 @@ class VerticalAnalysisDialog(QDialog):
         print("🚪 Closing Vertical Analysis Dialog - Cleaning up resources...")
         
         # =====================================================
-        # CLEANUP OPTIMIZATION THREAD
+        # SET FLAG DESTROYING UNTUK MENCEGAH CALLBACK BARU
         # =====================================================
-        if hasattr(self, 'optimize_thread') and self.optimize_thread and self.optimize_thread.isRunning():
-            print("  ⏳ Stopping optimization thread...")
-            if hasattr(self, 'optimize_worker') and self.optimize_worker:
-                self.optimize_worker.cancel()
-            self.optimize_thread.quit()
-            self.optimize_thread.wait(2000)  # Wait max 2 seconds
-            print("  ✅ Optimization thread stopped")
+        self._is_destroying = True
         
         # =====================================================
-        # CLEAR TERRAIN CACHE (DENGAN PENGECEKAN NONE)
+        # STOP PROFILE REFRESH TIMER
+        # =====================================================
+        if hasattr(self, '_profile_refresh_timer') and self._profile_refresh_timer:
+            try:
+                self._profile_refresh_timer.stop()
+                self._profile_refresh_timer.deleteLater()
+                print("  ✅ Profile refresh timer stopped")
+            except Exception as e:
+                print(f"  ⚠️ Error stopping profile timer: {e}")
+        
+        # =====================================================
+        # CLEANUP MAP WIDGET TIMERS
+        # =====================================================
+        if hasattr(self, 'map_widget') and self.map_widget:
+            try:
+                if hasattr(self.map_widget, 'cleanup_timers'):
+                    self.map_widget.cleanup_timers()
+                print("  ✅ Map widget timers cleaned up")
+            except Exception as e:
+                print(f"  ⚠️ Error cleaning map widget timers: {e}")
+        
+        # =====================================================
+        # CLEANUP OPTIMIZATION THREAD (IMPROVED)
+        # =====================================================
+        if hasattr(self, 'optimize_thread') and self.optimize_thread:
+            if self.optimize_thread.isRunning():
+                print("  ⏳ Stopping optimization thread...")
+                
+                # Signal worker untuk cancel
+                if hasattr(self, 'optimize_worker') and self.optimize_worker:
+                    self.optimize_worker.cancel()
+                
+                # Beri waktu untuk graceful shutdown
+                self.optimize_thread.quit()
+                
+                # Wait dengan timeout lebih panjang (5 detik)
+                if not self.optimize_thread.wait(5000):
+                    print("  ⚠️ Thread did not finish gracefully, terminating...")
+                    # Terminate hanya sebagai last resort
+                    self.optimize_thread.terminate()
+                    self.optimize_thread.wait(2000)
+                
+                print("  ✅ Optimization thread stopped")
+        
+        # =====================================================
+        # DISCONNECT ALL SIGNALS (OPTIONAL, TAPI AMAN)
+        # =====================================================
+        try:
+            # Disconnect signal yang berpotensi masalah
+            if hasattr(self, 'distance_slider'):
+                self.distance_slider.valueChanged.disconnect()
+        except:
+            pass
+        
+        # =====================================================
+        # CLEAR TERRAIN CACHE
         # =====================================================
         if hasattr(self, 'controller') and self.controller and hasattr(self.controller, 'engine'):
             if hasattr(self.controller.engine, 'sampler') and self.controller.engine.sampler is not None:
@@ -2421,8 +2509,17 @@ class VerticalAnalysisDialog(QDialog):
                     self.controller.engine.sampler.clear_cache()
                 except Exception as e:
                     print(f"  ⚠️ Error clearing cache: {e}")
-            else:
-                print("  ℹ️ Sampler not initialized (no analysis run), skipping cache cleanup")
+        
+        # =====================================================
+        # CLEAR INTERSECTION CACHE
+        # =====================================================
+        try:
+            from ...core.rf_engine.intersection_solver import IntersectionCache
+            cache = IntersectionCache()
+            cache.clear()
+            print("  🧹 Intersection cache cleared")
+        except Exception as e:
+            pass
         
         # =====================================================
         # FORCE GARBAGE COLLECTION
@@ -2785,11 +2882,19 @@ class VerticalAnalysisDialog(QDialog):
             return False, "Longitude cannot be empty", ""
         
         # =====================================================
-        # CHECK 2: Invalid characters (ERROR)
+        # CHECK 2: Invalid characters (ERROR) - SUPPORT SCIENTIFIC NOTATION
         # =====================================================
         import re
-        if re.search(r'[^\d\-\.,]', lat_text) or re.search(r'[^\d\-\.,]', lon_text):
-            return False, "Invalid characters. Only numbers, dots (.), commas (,), and minus sign (-) are allowed", ""
+        
+        # Allow scientific notation pattern: optional sign, digits, optional decimal, optional exponent
+        # Examples: -6.1754, 106.827, 1.23e-5, -9.876E+2
+        scientific_pattern = r'^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$'
+        
+        if not re.match(scientific_pattern, lat_text):
+            return False, "Invalid latitude format. Use decimal degrees (e.g., -6.1754) or scientific notation (e.g., 1.23e-5)", ""
+        
+        if not re.match(scientific_pattern, lon_text):
+            return False, "Invalid longitude format. Use decimal degrees (e.g., 106.827) or scientific notation (e.g., 1.23e-5)", ""
         
         # =====================================================
         # CHECK 3: Number format (ERROR)
@@ -3405,7 +3510,6 @@ class VerticalAnalysisDialog(QDialog):
             self.optimize_best.setText(f"Best so far: M:{mech}° E:{elec}° → {dist_text}")
             
         
-        
     def _optimization_finished_clean(self, top5):
         """
         Handle optimization completion with safe cleanup
@@ -3554,6 +3658,21 @@ class VerticalAnalysisDialog(QDialog):
         time_str = now.strftime("%H:%M:%S")
         ms_str = f"{now.microsecond//1000:03d}"
         
+        # =====================================================
+        # TAMBAHKAN DONASI MESSAGE (RANDOM) - PATCH UTAMA
+        # =====================================================
+        import random
+        
+        donation_messages = [
+            "☕ If TiltMaster helps your work, support its development: <a href='https://buymeacoffee.com/achmad.amrulloh'>buymeacoffee.com/achmad.amrulloh</a>",
+            "🙏 Enjoying TiltMaster? Consider a small donation: <a href='https://saweria.co/achmadamrulloh'>saweria.co/achmadamrulloh</a>",
+            "✨ Help keep TiltMaster free and updated: <a href='https://buymeacoffee.com/achmad.amrulloh'>buymeacoffee.com/achmad.amrulloh</a>",
+            "📊 Support future RF tools: <a href='https://saweria.co/achmadamrulloh'>saweria.co/achmadamrulloh</a>",
+            "🌐 International: <a href='https://buymeacoffee.com/achmad.amrulloh'>Buy Me a Coffee</a> | 🇮🇩 Lokal: <a href='https://saweria.co/achmadamrulloh'>Saweria</a>"
+        ]
+        
+        donation_msg = random.choice(donation_messages)
+        
         # Hitung durasi dari start menggunakan perf_counter
         if hasattr(self, '_optimize_start_perf'):
             perf_end = time.perf_counter()
@@ -3562,21 +3681,22 @@ class VerticalAnalysisDialog(QDialog):
             # Format durasi dengan milidetik
             if duration < 60:
                 # Kurang dari 1 menit: tampilkan detik dengan 1 desimal
-                status_text = f"✅ Optimization completed at {time_str}.{ms_str} (took {duration:.1f}s)"
+                status_text = f"✅ Optimization completed at {time_str}.{ms_str} (took {duration:.1f}s) | {donation_msg}"
                 print(f"✅ UI Update - Duration: {duration:.3f}s (perf_counter)")
             else:
                 # Lebih dari 1 menit: tampilkan menit:detik
                 minutes = int(duration // 60)
                 seconds = duration % 60
-                status_text = f"✅ Optimization completed at {time_str}.{ms_str} (took {minutes}m {seconds:.1f}s)"
-            
-            self.status_label.setText(status_text)
+                status_text = f"✅ Optimization completed at {time_str}.{ms_str} (took {minutes}m {seconds:.1f}s) | {donation_msg}"
         elif hasattr(self, '_optimize_start_time'):
             # Fallback ke datetime jika perf_counter tidak ada
             duration = (now - self._optimize_start_time).total_seconds()
-            self.status_label.setText(f"✅ Optimization completed at {time_str}.{ms_str} (took {duration:.1f}s)")
+            status_text = f"✅ Optimization completed at {time_str}.{ms_str} (took {duration:.1f}s) | {donation_msg}"
         else:
-            self.status_label.setText(f"✅ Optimization completed at {time_str}.{ms_str}")
+            status_text = f"✅ Optimization completed at {time_str}.{ms_str} | {donation_msg}"
+        
+        # Set status text dengan donasi
+        self.status_label.setText(status_text)
         
         # Re-enable UI
         self.start_optimize_btn.setEnabled(True)
@@ -3589,12 +3709,9 @@ class VerticalAnalysisDialog(QDialog):
         self.export_excel_btn.setEnabled(True)
         self.export_json_btn.setEnabled(True)
         
-        # =====================================================
-        # TAMBAHKAN: Tampilkan jumlah kombinasi di status
-        # =====================================================
-        self.status_label.setText(f"✅ Optimization complete - {len(self._all_optimization_results)} combinations analyzed")
         
-        # NOTE: Thread cleanup will be handled by _cleanup_optimization_thread
+        # NOTE: Thread cleanup will be handled by _cleanup_optimization_thread    
+        
         
 
     def _optimization_cancelled_clean(self):
@@ -3617,11 +3734,19 @@ class VerticalAnalysisDialog(QDialog):
         
     
     def _on_optimization_error(self, error_msg):
-        """Handle optimization error"""
+        """Handle optimization error dengan reset yang lebih baik"""
         print(f"❌ Optimization error: {error_msg}")
         
-        self.optimize_status.setText(f"Error: {error_msg[:50]}...")
+        # Reset progress bar
         self.optimize_progress.setValue(0)
+        self.optimize_progress.setFormat("Error - %p%")
+        
+        # Update status dengan error message
+        truncated_error = error_msg[:100] + "..." if len(error_msg) > 100 else error_msg
+        self.optimize_status.setText(f"❌ Error: {truncated_error}")
+        
+        # Clear best result
+        self.optimize_best.setText("Best so far: —")
         
         # Disable cancel button
         self.cancel_optimize_btn.setEnabled(False)
@@ -3630,12 +3755,24 @@ class VerticalAnalysisDialog(QDialog):
         self.start_optimize_btn.setEnabled(True)
         self.tab_widget.setEnabled(True)
         
-        # Show message box
-        QMessageBox.critical(
-            self,
-            "Optimization Error",
-            f"An error occurred during optimization:\n\n{error_msg}"
+        # =====================================================
+        # LOG ERROR DETAIL KE QGIS MESSAGE LOG
+        # =====================================================
+        from qgis.core import QgsMessageLog, Qgis
+        QgsMessageLog.logMessage(
+            f"Optimization error: {error_msg}\n{traceback.format_exc()}",
+            "TiltMaster",
+            Qgis.Critical
         )
+        
+        # Show message box dengan opsi untuk melihat log
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Critical)
+        msg_box.setWindowTitle("Optimization Error")
+        msg_box.setText(f"An error occurred during optimization:\n\n{error_msg}")
+        msg_box.setInformativeText("Check QGIS Log Messages panel for detailed error information.")
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec_()
         
 
     def _cleanup_optimization_thread(self):
@@ -3772,10 +3909,16 @@ class VerticalAnalysisDialog(QDialog):
                 
                 try:
                     with open(filename, 'w', newline='', encoding='utf-8-sig') as csvfile:
+
                         # =====================================================
-                        # METADATA HEADER (SEBAGAI KOMENTAR)
+                        # HEADER DONASI (PROFESIONAL)
                         # =====================================================
                         csvfile.write(f"# TiltMaster Optimization Results\n")
+                        csvfile.write(f"# Generated by TiltMaster v1.0.0\n")
+                        csvfile.write(f"# If this tool helps your work, consider supporting its development:\n")
+                        csvfile.write(f"# • 🌐 International: https://buymeacoffee.com/achmad.amrulloh\n")
+                        csvfile.write(f"# • 🇮🇩 Indonesia: https://saweria.co/achmadamrulloh\n")
+                        csvfile.write(f"# Thank you for using TiltMaster! 🙏\n")
                         csvfile.write(f"# Export Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                         
                         # Site Parameters
@@ -3985,6 +4128,8 @@ class VerticalAnalysisDialog(QDialog):
                     metadata_rows = [
                         ["Export Time", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
                         ["Plugin Version", "1.0.0"],
+                        ["Support", "🌐 Buy Me a Coffee: https://buymeacoffee.com/achmad.amrulloh"],
+                        ["", "🇮🇩 Saweria: https://saweria.co/achmadamrulloh"],
                         ["", ""],
                         ["SITE PARAMETERS", ""],
                         ["Latitude", site_params.get('latitude', '')],
@@ -4479,13 +4624,25 @@ class VerticalAnalysisDialog(QDialog):
             if widget_impact:
                 print(f"📢 Widget impact point: {widget_impact:.0f}m")
         
-        # Update nilai impact dengan prioritas: widget > main_intersection > fallback
+        # =====================================================
+        # FIXED: SAFE IMPACT ASSIGNMENT DENGAN FALLBACK
+        # =====================================================
+        impact = None
+        
         if widget_impact is not None:
             impact = widget_impact
             print(f"✅ Using widget impact point: {impact:.0f}m")
+        elif main_intersection is not None:
+            impact = main_intersection
+            print(f"✅ Using main_intersection: {impact:.0f}m")
+        elif result.get("impact_distance") is not None:
+            impact = result.get("impact_distance")
+            print(f"⚠️ Using fallback impact_distance: {impact:.0f}m")
         else:
-            impact = main_intersection or result.get("impact_distance")
-            print(f"⚠️ Using fallback impact: {impact:.0f}m")
+            print(f"⚠️ No impact point found in any source")
+        
+        # Simpan impact untuk digunakan di seluruh dialog
+        self._current_impact = impact
         
         # =====================================================
         # SIMPAN IMPACT UNTUK DIGUNAKAN DI SELURUH DIALOG (BARU)
@@ -4813,6 +4970,22 @@ class VerticalAnalysisDialog(QDialog):
         # =====================================================
 
         self.status_label.setText("Analysis completed")
+        # =====================================================
+        # TAMBAHKAN DONASI MESSAGE DI STATUS (SUBTLE)
+        # =====================================================
+        # Gunakan random message agar tidak monoton
+        import random
+
+        donation_messages = [
+            "☕ If TiltMaster helps your work, support its development: <a href='https://buymeacoffee.com/achmad.amrulloh'>buymeacoffee.com/achmad.amrulloh</a>",
+            "🙏 Enjoying TiltMaster? Consider a small donation: <a href='https://saweria.co/achmadamrulloh'>saweria.co/achmadamrulloh</a>",
+            "✨ Help keep TiltMaster free and updated: <a href='https://buymeacoffee.com/achmad.amrulloh'>buymeacoffee.com/achmad.amrulloh</a>",
+            "📊 Support future RF tools: <a href='https://saweria.co/achmadamrulloh'>saweria.co/achmadamrulloh</a>",
+            "🌐 International: <a href='https://buymeacoffee.com/achmad.amrulloh'>Buy Me a Coffee</a> | 🇮🇩 Lokal: <a href='https://saweria.co/achmadamrulloh'>Saweria</a>"
+        ]
+
+        donation_msg = random.choice(donation_messages)
+        self.status_label.setText(f"Analysis completed - Impact: {impact_display} | {donation_msg}")
         
     
     def _project_point(self, lat, lon, azimuth, distance):
@@ -5182,3 +5355,52 @@ class VerticalAnalysisDialog(QDialog):
             return "Edge coverage: Signal weakening"
         else:
             return "Beyond main beam: Overshoot potential"
+            
+            
+    def _refresh_profile_plot(self, *args):
+        """
+        Refresh terrain profile after splitter resize.
+        Uses QTimer to debounce rapid resize events.
+        """
+
+        try:
+
+            # cancel pending refresh if exists
+            if hasattr(self, "_profile_refresh_timer"):
+                self._profile_refresh_timer.stop()
+
+            # create timer if not exist
+            if not hasattr(self, "_profile_refresh_timer"):
+                self._profile_refresh_timer = QTimer()
+                self._profile_refresh_timer.setSingleShot(True)
+                self._profile_refresh_timer.timeout.connect(self._apply_profile_refresh)
+
+            # start timer (debounce 30ms)
+            self._profile_refresh_timer.start(30)
+
+        except Exception:
+            pass
+            
+            
+    def _apply_profile_refresh(self):
+        """
+        Apply actual refresh for terrain profile.
+        This is called after resize debounce.
+        """
+        # =====================================================
+        # GUARD CLAUSE: Jangan eksekusi jika dialog sedang di-destroy
+        # =====================================================
+        if hasattr(self, '_is_destroying') and self._is_destroying:
+            return
+
+        try:
+            if hasattr(self, "profile_widget") and self.profile_widget:
+                # redraw plot
+                if hasattr(self.profile_widget, "plot_item"):
+                    self.profile_widget.plot_item.update()
+
+                # rescale SVG tower
+                if hasattr(self.profile_widget, "_update_tower_scale"):
+                    self.profile_widget._update_tower_scale()
+        except Exception:
+            pass

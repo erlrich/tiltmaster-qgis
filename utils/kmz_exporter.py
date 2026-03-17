@@ -69,7 +69,6 @@ class KMZExporter:
                 return False
         
         try:
-            # Create temporary directory
             with tempfile.TemporaryDirectory() as tmpdir:
                 kml_path = os.path.join(tmpdir, "doc.kml")
                 
@@ -90,21 +89,14 @@ class KMZExporter:
                 # Create KMZ (ZIP)
                 with zipfile.ZipFile(filename, 'w', zipfile.ZIP_DEFLATED) as kmz:
                     kmz.write(kml_path, "doc.kml")
-            
-            QMessageBox.information(
-                self.iface.mainWindow(),
-                "Export Successful",
-                f"Sector exported to:\n{filename}"
-            )
-            return True
-            
+                    
         except Exception as e:
-            QMessageBox.critical(
-                self.iface.mainWindow(),
-                "Export Failed",
-                f"Error creating KMZ:\n{str(e)}"
-            )
-            return False
+            # Log error dengan detail
+            print(f"❌ KMZ export failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+            
     
     def _generate_kml(
         self,

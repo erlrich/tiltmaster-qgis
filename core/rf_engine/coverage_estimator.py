@@ -127,37 +127,78 @@ class CoverageEstimator:
         }
 
     # ======================================================
-    # FINAL COVERAGE DISTANCE - FIXED (GUNAKAN INTERSECTION)
+    # FINAL COVERAGE DISTANCE - FIXED DENGAN SAFE ACCESS
     # ======================================================
 
     def final_coverage(self, coverage_results):
         """
         Menentukan coverage final sektor.
         PRIORITY: main beam intersection > main beam free space
+        
+        Parameters
+        ----------
+        coverage_results : dict
+            Hasil dari estimate_all()
+            
+        Returns
+        -------
+        dict
+            {'distance': float or None, 'type': str}
         """
+        
+        # =====================================================
+        # VALIDASI INPUT
+        # =====================================================
+        if not isinstance(coverage_results, dict):
+            print(f"❌ coverage_results is not a dict: {type(coverage_results)}")
+            return {"distance": None, "type": "invalid_input"}
+        
+        if "main_beam" not in coverage_results:
+            print(f"❌ coverage_results missing 'main_beam' key")
+            return {"distance": None, "type": "missing_key"}
         
         main = coverage_results["main_beam"]
         
+        # =====================================================
         # PRIORITY 1: Main beam intersection
-        if main["coverage_type"] in ["terrain_blocked", "ground_hit"]:
-            if main["coverage_distance"] is not None:
-                print(f"  ✅ Using main beam: {main['coverage_distance']:.0f}m ({main['coverage_type']})")
+        # =====================================================
+        if isinstance(main, dict):
+            cov_type = main.get("coverage_type")
+            cov_dist = main.get("coverage_distance")
+            
+            if cov_type in ["terrain_blocked", "ground_hit"] and cov_dist is not None:
+                print(f"  ✅ Using main beam: {cov_dist:.0f}m ({cov_type})")
                 return {
-                    "distance": main["coverage_distance"],
-                    "type": main["coverage_type"]
+                    "distance": cov_dist,
+                    "type": cov_type
                 }
         
-        # PRIORITY 2: Main beam free space (hanya jika intersection None)
-        if main["coverage_distance"] is not None:
-            print(f"  ⚠️ No intersection, using free space: {main['coverage_distance']:.0f}m")
+        # =====================================================
+        # PRIORITY 2: Main beam free space
+        # =====================================================
+        if isinstance(main, dict) and main.get("coverage_distance") is not None:
+            cov_dist = main.get("coverage_distance")
+            print(f"  ⚠️ No intersection, using free space: {cov_dist:.0f}m")
             return {
-                "distance": main["coverage_distance"],
+                "distance": cov_dist,
                 "type": "ground_hit"
             }
         
-        # Fallback ke lower beam
-        lower = coverage_results["lower_beam"]
+        # =====================================================
+        # PRIORITY 3: Fallback ke lower beam
+        # =====================================================
+        if "lower_beam" in coverage_results and isinstance(coverage_results["lower_beam"], dict):
+            lower = coverage_results["lower_beam"]
+            return {
+                "distance": lower.get("coverage_distance"),
+                "type": lower.get("coverage_type", "unknown")
+            }
+        
+        # =====================================================
+        # FINAL FALLBACK
+        # =====================================================
+        print(f"  ❌ No valid coverage found in results")
         return {
-            "distance": lower["coverage_distance"],
-            "type": lower["coverage_type"]
+            "distance": None,
+            "type": "no_coverage"
         }
