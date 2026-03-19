@@ -107,7 +107,7 @@ pip install pyqtgraph
 ```
 ---
 
-🙏 Acknowledgement & Inspiration
+## 🙏 Acknowledgement & Inspiration
 
 This plugin was inspired by several RF engineering tools, including:
 
