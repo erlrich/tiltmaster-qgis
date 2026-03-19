@@ -3,7 +3,9 @@
 [![QGIS Plugin](https://img.shields.io/badge/QGIS-3.22+-green.svg)](https://qgis.org)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)]()
 
-Advanced RF planning tools for telecommunication engineers. Perform vertical beam analysis, terrain intersection detection, coverage footprint calculation, and tilt optimization.
+Advanced RF planning toolkit for telecommunication engineers.  
+Perform terrain-aware vertical beam analysis, intersection detection, coverage footprint estimation, and tilt optimization directly inside QGIS.
+
 
 ---
 
@@ -12,23 +14,27 @@ Advanced RF planning tools for telecommunication engineers. Perform vertical bea
 ### 📡 RF Vertical Analysis
 - **Terrain Profile**: Visualize terrain elevation along antenna azimuth
 - **Beam Geometry**: Calculate main, upper, and lower beam angles
-- **Intersection Detection**: Find where beams intersect terrain
-- **Coverage Footprint**: Generate annular sector coverage area
+- **Intersection Detection**: Detect where beams intersect terrain
+- **Coverage Footprint**: Generate terrain-adjusted coverage area
 - **Dual Unit Support**: Metric (m/km) and Imperial (ft/mi)
 
 ### ⚙️ Tilt Optimizer
 - **3 Optimization Modes**:
-  - Precise: Total tilt only (21 iterations)
-  - Smart: Total tilt + top 5 distributions (~35 iterations)
-  - Fast: Mechanical tilt only (11 iterations)
-- **Multiple Criteria**: Maximum coverage, target distance, balanced range
+  - **Precise**: Total tilt only (21 iterations)
+  - **Smart**: Total tilt + top 5 distributions (~35 iterations)
+  - **Fast**: Mechanical tilt only (11 iterations)
+- **Multiple Criteria**:
+  - Maximum coverage
+  - Target distance
+  - Balanced coverage range
 - **Caching System**: Accelerates repeated calculations
 - **Export Results**: CSV, Excel, JSON formats
 
-### 🗺️ Visualization
+### 🗺️ Visualization & GIS Integration
 - Embedded QGIS map canvas with OSM basemap
-- Terrain profile graph with beam lines
+- Terrain profile graph with beam visualization
 - Draggable legends for map and profile
+- Sector coverage visualization
 - KMZ export for Google Earth
 
 ---
@@ -45,7 +51,7 @@ Advanced RF planning tools for telecommunication engineers. Perform vertical bea
 
 ## 📦 Installation
 
-### From QGIS Plugin Repository (Coming Soon)
+### From QGIS Plugin Repository.
 1. Open QGIS
 2. Go to `Plugins → Manage and Install Plugins`
 3. Search for "TiltMaster"
@@ -99,6 +105,18 @@ Advanced RF planning tools for telecommunication engineers. Perform vertical bea
 ```bash
 pip install pyqtgraph
 ```
+---
+
+🙏 Acknowledgement & Inspiration
+
+This plugin was inspired by several RF engineering tools, including:
+
+RF Universe Antenna Downtilt Calculator — Victor Perez
+
+Kathrein Antenna Tilt Tool
+
+TiltMaster is a QGIS-native implementation designed for terrain-aware RF vertical analysis, built entirely from scratch and optimized for GIS-based RF workflows.
+
 ---
 
 ## License
