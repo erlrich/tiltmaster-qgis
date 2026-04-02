@@ -38,9 +38,21 @@ osgeo4w-setup -k pyqtgraph
 
 ## Option 2: Using pip in OSGeo4W Shell
 
+### 1. Open OSGeo4W Shell
+- Click Start Menu
+- Search for **OSGeo4W Shell**
+- Run as Administrator (right-click → Run as administrator)
+
+### 2. Run installation command
 ```bash
 python -m pip install pyqtgraph
 ```
+
+### 3. Follow the setup wizard
+- Wait installation command complete
+- Complete the installation
+
+### 4. Restart QGIS
 
 > 💡 **Screenshot Reference:**
 > ![OSGeo4W Shell](docs/images/osgeo4w_shell.png)
