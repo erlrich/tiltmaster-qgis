@@ -7,158 +7,172 @@
 - "PyQtGraph Not Installed" appears in the analysis dialog
 - Error: `No module named 'pyqtgraph'`
 
-### Solution
+---
+
+## Solution
 
 Choose one of the following methods:
 
 ---
 
-#### Option 1: Install via OSGeo4W (Recommended for Windows)
+## Option 1: Install via OSGeo4W (Recommended for Windows)
 
-1. **Open OSGeo4W Shell**
-   - Click Start Menu
-   - Search for "OSGeo4W Shell"
-   - Run as Administrator (right-click → Run as administrator)
+### 1. Open OSGeo4W Shell
+- Click Start Menu
+- Search for **OSGeo4W Shell**
+- Run as Administrator (right-click → Run as administrator)
 
-2. **Run installation command**
+### 2. Run installation command
+```bash
 osgeo4w-setup -k pyqtgraph
+```
 
-text
-
-3. **Follow the setup wizard**
-- Select "Install" or "Upgrade"
-- Choose the pyqtgraph package
+### 3. Follow the setup wizard
+- Select **Install** or **Upgrade**
+- Choose the **pyqtgraph** package
 - Complete the installation
 
-4. **Restart QGIS**
-
-> 💡 **Screenshot Reference:**
-> ![OSGeo4W Shell](docs/images/osgeo4w_shell.png)
-> *OSGeo4W Shell interface after running the command*
+### 4. Restart QGIS
 
 ---
 
-#### Option 2: Install via QGIS Python Console
+## Option 2: Install via QGIS Python Console
 
-1. Open QGIS Python Console
-- `Plugins → Python Console` or press `Ctrl+Alt+P`
+### 1. Open QGIS Python Console
+- `Plugins → Python Console`
+- or press `Ctrl+Alt+P`
 
-2. Run the following command:
+### 2. Run:
 ```python
 import subprocess
 import sys
 subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pyqtgraph'])
-Restart QGIS
+```
 
-Option 3: Using pip in OSGeo4W Shell
-Open OSGeo4W Shell and run:
+### 3. Restart QGIS
 
-bash
+---
+
+## Option 3: Using pip in OSGeo4W Shell
+
+```bash
 python -m pip install pyqtgraph
-Option 4: Manual Download
-Download pyqtgraph from: https://pypi.org/project/pyqtgraph/
+```
 
-Extract the package
+---
 
-Copy to QGIS Python site-packages folder:
+## Option 4: Manual Download
 
-Typical location: C:\OSGeo4W\apps\Python39\Lib\site-packages\
+- Download: https://pypi.org/project/pyqtgraph/
+- Extract the package
+- Copy to:
 
-Verification
-After installation, verify PyQtGraph is installed:
+```
+C:\OSGeo4W\apps\Python39\Lib\site-packages\
+```
 
-Open QGIS Python Console
+---
 
-Run:
+## Verification
 
-python
+Run in QGIS Python Console:
+
+```python
 import pyqtgraph
 print(pyqtgraph.__version__)
-If version number appears, installation was successful.
+```
 
-Common Issues
-"pip is not recognized"
-Solution: Use OSGeo4W Shell instead of regular Command Prompt.
+If version appears, installation successful.
 
-"Access denied" error
-Solution: Run OSGeo4W Shell as Administrator.
+---
 
-Package already installed but still error
-Solution:
+## Common Issues
 
-Check if multiple Python versions exist
+### "pip is not recognized"
+Use OSGeo4W Shell instead of CMD.
 
-Restart QGIS completely (not just the plugin)
+---
 
-Try reinstalling with --force-reinstall flag
+### "Access denied"
+Run OSGeo4W Shell as Administrator.
 
-Other Common Issues
-DEM Layer Not Found
-Symptom: "No DEM layer found in current project"
+---
 
-Solution:
+### Package installed but still error
+- Check multiple Python versions
+- Restart QGIS completely
+- Reinstall:
+```bash
+python -m pip install --force-reinstall pyqtgraph
+```
 
-Load a DEM raster layer (e.g., SRTM, ASTER) into your QGIS project
+---
 
-Ensure the layer is a valid raster layer
+## Other Common Issues
 
-Try switching to "Open-Meteo (Online)" source if no local DEM is available
+### DEM Layer Not Found
+**Symptom:**  
+`No DEM layer found in current project`
 
-Basemap Not Loading
-Symptom: Map is blank or white
+**Solution:**
+- Load DEM raster (SRTM / ASTER)
+- Ensure valid raster layer
+- Use Open-Meteo (Online) if needed
 
-Solution:
+---
 
-Check your internet connection
+### Basemap Not Loading
+**Symptom:**  
+Map blank / white
 
-Try selecting a different basemap from the dropdown
+**Solution:**
+- Check internet
+- Change basemap
+- Click refresh (↻)
 
-Click the refresh button (↻) to reload basemap list
+---
 
-Export to KMZ Fails
-Symptom: "KMZ export failed" message
+### Export KMZ Failed
+**Solution:**
+- Ensure write permission
+- Save to Desktop
+- Avoid special characters
 
-Solution:
+---
 
-Ensure you have write permissions to the destination folder
+### No Elevation Data (0m)
+**Solution:**
+- Load valid DEM
+- Check internet
+- Verify coordinate coverage
 
-Try saving to a different location (e.g., Desktop)
+---
 
-Check if the filename contains special characters
+## Getting Help
 
-No Elevation Data (All terrain = 0)
-Symptom: Terrain profile shows flat line at 0m elevation
+### Check Logs
+- View → Panels → Log Messages
+- Look for TiltMaster
 
-Solution:
+---
 
-Local DEM: Ensure you have loaded a valid DEM raster layer
+### Report Issue
+Include:
+- OS version
+- QGIS version
+- Error messages
+- Screenshot
 
-Online Source: Check your internet connection
+Repo:
+https://github.com/erlrich/tiltmaster-qgis
 
-Verify the site coordinates are within DEM coverage area
+---
 
-Getting Help
-If you continue to experience issues:
+## Support Development
 
-Check QGIS Log Messages
+- https://buymeacoffee.com/achmad.amrulloh  
+- https://saweria.co/achmadamrulloh  
 
-View → Panels → Log Messages
+---
 
-Look for "TiltMaster" in the log
-
-Report on GitHub
-
-Include: OS version, QGIS version, and error messages
-
-Attach screenshot if possible
-
-Repository: https://github.com/erlrich/tiltmaster-qgis
-
-Support Development
-If TiltMaster helps your work, consider supporting its development:
-
-🌐 International: https://buymeacoffee.com/achmad.amrulloh
-
-🇮🇩 Indonesia: https://saweria.co/achmadamrulloh
-
-Last updated: April 2026
+_Last updated: April 2026_
