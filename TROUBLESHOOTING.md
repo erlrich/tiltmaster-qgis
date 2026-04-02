@@ -36,24 +36,7 @@ osgeo4w-setup -k pyqtgraph
 
 ---
 
-## Option 2: Install via QGIS Python Console
-
-### 1. Open QGIS Python Console
-- `Plugins → Python Console`
-- or press `Ctrl+Alt+P`
-
-### 2. Run:
-```python
-import subprocess
-import sys
-subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pyqtgraph'])
-```
-
-### 3. Restart QGIS
-
----
-
-## Option 3: Using pip in OSGeo4W Shell
+## Option 2: Using pip in OSGeo4W Shell
 
 ```bash
 python -m pip install pyqtgraph
@@ -65,7 +48,7 @@ python -m pip install pyqtgraph
 
 ---
 
-## Option 4: Manual Download
+## Option 3: Manual Download
 
 - Download: https://pypi.org/project/pyqtgraph/
 - Extract the package
@@ -86,7 +69,11 @@ import pyqtgraph
 print(pyqtgraph.__version__)
 ```
 
-If version appears, installation successful.
+If version appears as below, installation successful.
+
+```python
+0.14.0
+```
 
 ---
 
