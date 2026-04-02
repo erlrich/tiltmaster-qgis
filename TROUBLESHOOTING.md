@@ -59,6 +59,10 @@ subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pyqtgraph'])
 python -m pip install pyqtgraph
 ```
 
+> 💡 **Screenshot Reference:**
+> ![OSGeo4W Shell](docs/images/osgeo4w_shell.png)
+> *OSGeo4W Shell interface after running the command*
+
 ---
 
 ## Option 4: Manual Download
