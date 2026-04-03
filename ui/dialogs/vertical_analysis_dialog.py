@@ -1261,7 +1261,32 @@ class VerticalAnalysisDialog(QDialog):
 
         self.controller = controller
 
-        self.setWindowTitle("RF Vertical Analysis")
+        # =====================================================
+        # SET WINDOW TITLE DAN ICON
+        # =====================================================
+        self.setWindowTitle("TiltMaster - RF Vertical Analysis")
+        
+        # Set window icon from plugin's SVG file
+        import os
+        icon_path = os.path.join(
+            os.path.dirname(__file__),
+            '..', '..', 'resources', 'icons', 'tiltmasters.svg'
+        )
+        if os.path.exists(icon_path):
+            from PyQt5.QtGui import QIcon
+            self.setWindowIcon(QIcon(icon_path))
+        else:
+            print(f"⚠️ Icon not found: {icon_path}")
+        
+        # =====================================================
+        # ENABLE MAXIMIZE/MINIMIZE BUTTONS (IMPROVEMENT UX)
+        # =====================================================
+        # Add maximize and minimize buttons while keeping existing behavior
+        self.setWindowFlags(
+            self.windowFlags() |
+            Qt.WindowMinimizeButtonHint |
+            Qt.WindowMaximizeButtonHint
+        )
         
         # =====================================================
         # AUTO-ADJUST DIALOG SIZE BASED ON SCREEN RESOLUTION
@@ -1400,7 +1425,11 @@ class VerticalAnalysisDialog(QDialog):
             border: 1px solid #c9d9e0;
         }
         """)
-
+        
+        # Path ke icons (untuk digunakan di seluruh dialog)
+        plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        icons_dir = os.path.join(plugin_dir, 'resources', 'icons')
+        
         # =====================================================
         # MAIN LAYOUT
         # =====================================================
@@ -1447,7 +1476,7 @@ class VerticalAnalysisDialog(QDialog):
         # Buat card sebagai widget di dalam scroll area
         inputs_card = QFrame()
         inputs_card.setProperty("class", "card")
-        inputs_card.setFixedWidth(380)  # <-- DARI 340 MENJADI 380
+        inputs_card.setFixedWidth(390)  # <-- DARI 340 MENJADI 390
         inputs_card.setStyleSheet("""
             QFrame.card {
                 background: #ffffff;
@@ -1483,10 +1512,69 @@ class VerticalAnalysisDialog(QDialog):
         basic_layout.setSpacing(10)
         
         # =====================================================
-        # SECTION 1: RF PARAMETERS
+        # SECTION 1: SITE LOCATION (DIPINDAH KE ATAS)
+        # =====================================================
+        site_group = QGroupBox("Site Location")
+        site_group.setFixedWidth(340)
+        site_group.setMaximumHeight(150)
+        site_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #c9d9e0;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding-top: 10px;
+                padding-left: 15px;
+                padding-right: 15px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
+        
+        site_layout = QFormLayout(site_group)
+        site_layout.setLabelAlignment(Qt.AlignLeft)
+        site_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        site_layout.setContentsMargins(12, 12, 12, 12)
+        site_layout.setSpacing(6)
+        site_layout.setHorizontalSpacing(70)
+        
+        # Atur lebar minimum untuk spinbox agar seragam
+        spinbox_width = 170
+        
+        # Latitude
+        self.latitude_input = QLineEdit()
+        self.latitude_input.setText("-6.88908")
+        self.latitude_input.setPlaceholderText("-6.88908")
+        self.latitude_input.setFixedWidth(spinbox_width)
+        site_layout.addRow("Latitude:", self.latitude_input)
+
+        # Longitude
+        self.longitude_input = QLineEdit()
+        self.longitude_input.setText("107.61848")
+        self.longitude_input.setPlaceholderText("107.61848")
+        self.longitude_input.setFixedWidth(spinbox_width)
+        site_layout.addRow("Longitude:", self.longitude_input)
+
+        # Azimuth
+        self.azimuth_spin = QDoubleSpinBox()
+        self.azimuth_spin.setRange(0, 359.99)
+        self.azimuth_spin.setDecimals(1)
+        self.azimuth_spin.setSingleStep(5)
+        self.azimuth_spin.setValue(90)
+        self.azimuth_spin.setSuffix("°")
+        self.azimuth_spin.setFixedWidth(spinbox_width)
+        site_layout.addRow("Azimuth:", self.azimuth_spin)
+        
+        basic_layout.addWidget(site_group, 0, Qt.AlignLeft)
+        
+        # =====================================================
+        # SECTION 2: RF PARAMETERS
         # =====================================================
         rf_group = QGroupBox("RF Parameters")
-        rf_group.setFixedWidth(330)  # <-- TAMBAHKAN
+        rf_group.setFixedWidth(340)  # <-- TAMBAHKAN
         rf_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -1520,12 +1608,10 @@ class VerticalAnalysisDialog(QDialog):
         for i in range(rf_layout.rowCount()):
             label_item = rf_layout.itemAt(i, QFormLayout.LabelRole)
             if label_item and label_item.widget():
-                label_item.widget().setMinimumWidth(130)  # <-- TAMBAHKAN INI
+                label_item.widget().setMinimumWidth(150)  # <-- TAMBAHKAN INI
         
         # Atur lebar minimum untuk spinbox agar seragam
         spinbox_width = 170  # <-- KURANGI SEDIKIT AGAR LEBIH PROPORSIONAL
-        
-        basic_layout.addWidget(rf_group, 0, Qt.AlignLeft)  # <-- TAMBAHKAN ALIGN LEFT
 
         # UNIT SYSTEM
         self.unit_combo = QComboBox()
@@ -1603,13 +1689,14 @@ class VerticalAnalysisDialog(QDialog):
         self.h_beamwidth_spin.setFixedWidth(spinbox_width)
         # HAPUS self.h_beamwidth_spin.setAlignment(Qt.AlignRight)
         rf_layout.addRow("Horizontal Beamwidth:", self.h_beamwidth_spin)
-       
-        
+        basic_layout.addWidget(rf_group, 0, Qt.AlignLeft)
+
         # =====================================================
-        # SECTION 2: ANALYSIS RANGE
+        # SECTION 3: ANALYSIS RANGE
         # =====================================================
         range_group = QGroupBox("Analysis Range")
-        range_group.setFixedWidth(330)  # <-- TAMBAHKAN
+        range_group.setFixedWidth(340)  # <-- TAMBAHKAN
+        range_group.setMaximumHeight(100)  # <-- TAMBAHKAN INI
         range_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -1632,8 +1719,8 @@ class VerticalAnalysisDialog(QDialog):
         range_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         range_layout.setContentsMargins(12, 12, 12, 12)  # <-- KURANGI JADI 12 SEMUA
         range_layout.setSpacing(6)  # <-- TAMBAHKAN
-        range_layout.setHorizontalSpacing(15)
-        basic_layout.addWidget(range_group, 0, Qt.AlignLeft)
+        range_layout.setHorizontalSpacing(55)
+
 
         # MAX DISTANCE
         self.distance_spin = QDoubleSpinBox()
@@ -1652,76 +1739,19 @@ class VerticalAnalysisDialog(QDialog):
         self.distance_slider.setPageStep(100)
         self.distance_slider.setValue(5000)
         self.distance_label = QLabel("5000 m")
-        self.distance_label.setFixedWidth(60)
+        self.distance_label.setFixedWidth(40)
         slider_layout.addWidget(self.distance_slider)
         slider_layout.setSpacing(10)  # <-- TAMBAHKAN
         slider_layout.addWidget(self.distance_label)
-        range_layout.addRow("", slider_layout)
-        
-        
-        # =====================================================
-        # SECTION 2: SITE LOCATION
-        # =====================================================
-        site_group = QGroupBox("Site Location")
-        site_group.setFixedWidth(330)  # <-- TAMBAHKAN
-        site_group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 1px solid #c9d9e0;
-                border-radius: 8px;
-                margin-top: 12px;
-                padding-top: 10px;
-                padding-left: 15px;
-                padding-right: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """)
-        
-        site_layout = QFormLayout(site_group)
-        site_layout.setLabelAlignment(Qt.AlignLeft)
-        site_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-        site_layout.setContentsMargins(12, 12, 12, 12)  # <-- KURANGI JADI 12 SEMUA
-        site_layout.setSpacing(6)   # <-- TAMBAHKAN
-        site_layout.setHorizontalSpacing(15)
-        basic_layout.addWidget(site_group, 0, Qt.AlignLeft)
-
-        # Latitude
-        self.latitude_input = QLineEdit()
-        self.latitude_input.setText("-6.88908")  # <-- TAMBAHKAN DEFAULT VALUE
-        self.latitude_input.setPlaceholderText("-6.88908")
-        self.latitude_input.setFixedWidth(spinbox_width)
-        # HAPUS self.latitude_input.setAlignment(Qt.AlignRight)
-        site_layout.addRow("Latitude:", self.latitude_input)
-
-        # Longitude
-        self.longitude_input = QLineEdit()
-        self.longitude_input.setText("107.61848")  # <-- TAMBAHKAN DEFAULT VALUE
-        self.longitude_input.setPlaceholderText("107.61848")
-        self.longitude_input.setFixedWidth(spinbox_width)
-        # HAPUS self.longitude_input.setAlignment(Qt.AlignRight)
-        site_layout.addRow("Longitude:", self.longitude_input)
-
-        # Azimuth
-        self.azimuth_spin = QDoubleSpinBox()
-        self.azimuth_spin.setRange(0, 359.99)
-        self.azimuth_spin.setDecimals(1)
-        self.azimuth_spin.setSingleStep(5)
-        self.azimuth_spin.setValue(90)
-        self.azimuth_spin.setSuffix("°")
-        self.azimuth_spin.setFixedWidth(spinbox_width)
-        # HAPUS self.azimuth_spin.setAlignment(Qt.AlignRight)
-        site_layout.addRow("Azimuth:", self.azimuth_spin)
-        
+        range_layout.addRow("", slider_layout)        
+        basic_layout.addWidget(range_group, 0, Qt.AlignLeft)
         
         # =====================================================
-        # SECTION 3: DATA SOURCE
+        # SECTION 4: DATA SOURCE
         # =====================================================
         source_group = QGroupBox("Data Source")
-        source_group.setFixedWidth(330)
+        source_group.setFixedWidth(340)
+        source_group.setMaximumHeight(130)  # <-- TAMBAHKAN
         source_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -1746,7 +1776,8 @@ class VerticalAnalysisDialog(QDialog):
         source_layout.setContentsMargins(12, 12, 12, 12)
         source_layout.setSpacing(6)
         source_layout.setHorizontalSpacing(15)
-        basic_layout.addWidget(source_group, 0, Qt.AlignLeft)
+        
+        
 
         # =====================================================
         # DEM SOURCE (menggunakan QFormLayout)
@@ -1796,22 +1827,33 @@ class VerticalAnalysisDialog(QDialog):
         )
         basemap_container_layout.addWidget(self.basemap_combo)
 
-        self.refresh_basemap_btn = QPushButton("↻ ")
+        # Tombol Refresh Basemap dengan icon SVG
+        self.refresh_basemap_btn = QPushButton()
+        refresh_icon_path = os.path.join(icons_dir, 'refresh_basemap.svg')
+        if os.path.exists(refresh_icon_path):
+            self.refresh_basemap_btn.setIcon(QIcon(refresh_icon_path))
+            self.refresh_basemap_btn.setIconSize(QtCore.QSize(22, 22))
+            self.refresh_basemap_btn.setToolTip("Refresh basemap list")
+        else:
+            self.refresh_basemap_btn.setText("↻")
+            self.refresh_basemap_btn.setToolTip("Refresh basemap list")
         self.refresh_basemap_btn.setProperty("class", "secondary")
         self.refresh_basemap_btn.setFixedSize(25, 25)
-        self.refresh_basemap_btn.setToolTip("Refresh basemap list")
         self.refresh_basemap_btn.clicked.connect(self._refresh_basemap_list)
         basemap_container_layout.addWidget(self.refresh_basemap_btn)
         basemap_container_layout.addStretch()  # Ini penting agar tombol tetap di kanan
-
+       
         source_layout.addRow("Basemap:", basemap_container)
-
-        # Hubungkan signal untuk mengganti basemap secara real-time
-        self.basemap_combo.currentIndexChanged.connect(self._on_basemap_changed)
-        
         
         # =====================================================
-        # SECTION 4: ACTIONS
+        # TAMBAHKAN: Hubungkan signal untuk mengganti basemap secara real-time
+        # =====================================================
+        self.basemap_combo.currentIndexChanged.connect(self._on_basemap_changed)
+        
+        basic_layout.addWidget(source_group, 0, Qt.AlignLeft)
+        
+        # =====================================================
+        # SECTION 5: ACTIONS
         # =====================================================
         action_layout = QHBoxLayout()
         action_layout.setContentsMargins(10, 10, 10, 10)
@@ -1829,9 +1871,8 @@ class VerticalAnalysisDialog(QDialog):
         action_layout.addWidget(self.reset_button)
         action_layout.addWidget(self.run_button)
         
-        action_layout.addStretch()
+        # action_layout.addStretch()
         basic_layout.addLayout(action_layout)
-        
         
         # =====================================================
         # ELEVATION INFO (STATUS)
@@ -1920,40 +1961,60 @@ class VerticalAnalysisDialog(QDialog):
         target_layout.addStretch()
         criteria_layout.addLayout(target_layout)
         
-        # Balanced Coverage
-        balanced_layout = QVBoxLayout()
+        # Balanced Coverage - REDESIGN dengan QFormLayout
+        # Balanced Coverage - REDESIGN: Baris 1 checkbox, Baris 2 Min dan Max sejajar dengan spinbox Target Distance
+        balanced_container = QWidget()
+        balanced_layout = QVBoxLayout(balanced_container)
+        balanced_layout.setContentsMargins(0, 0, 0, 0)
+        balanced_layout.setSpacing(5)
+        
+        # Baris 1: Checkbox + Balanced Coverage (tanpa spinbox)
         self.cb_balanced = QCheckBox("Balanced Coverage")
         balanced_layout.addWidget(self.cb_balanced)
         
-        # Min distance
-        min_layout = QHBoxLayout()
-        min_layout.addSpacing(20)
-        min_layout.addWidget(QLabel("Min:"))
+        # Baris 2: Min dan Max dengan indentasi sejajar spinbox Target Distance
+        row2_layout = QHBoxLayout()
+        row2_layout.setSpacing(10)
+        
+        # Indentasi: hitung lebar checkbox + spacing
+        # Checkbox lebar ~20px, spacing 10px = 30px
+        # Ditambah jarak antara label "Target Distance" dengan spinbox di baris sebelumnya
+        # Agar sejajar dengan spinbox Target Distance (800.00 m)
+        row2_layout.addSpacing(10)  # Indentasi mengikuti posisi spinbox Target Distance
+        
+        # Min section
+        min_label = QLabel("Min:")
+        row2_layout.addWidget(min_label)
+        
         self.balanced_min_spin = QDoubleSpinBox()
         self.balanced_min_spin.setRange(0, 10000)
         self.balanced_min_spin.setValue(RFDefaults.BALANCED_MIN)
         self.balanced_min_spin.setSingleStep(10)
         self.balanced_min_spin.setSuffix(" m")
         self.balanced_min_spin.setEnabled(False)
-        min_layout.addWidget(self.balanced_min_spin)
-        min_layout.addStretch()
-        balanced_layout.addLayout(min_layout)
+        self.balanced_min_spin.setFixedWidth(100)
+        row2_layout.addWidget(self.balanced_min_spin)
         
-        # Max distance
-        max_layout = QHBoxLayout()
-        max_layout.addSpacing(20)
-        max_layout.addWidget(QLabel("Max:"))
+        # Spacer antara Min dan Max
+        row2_layout.addSpacing(20)
+        
+        # Max section
+        max_label = QLabel("Max:")
+        row2_layout.addWidget(max_label)
+        
         self.balanced_max_spin = QDoubleSpinBox()
         self.balanced_max_spin.setRange(0, 10000)
         self.balanced_max_spin.setValue(RFDefaults.BALANCED_MAX)
         self.balanced_max_spin.setSingleStep(10)
         self.balanced_max_spin.setSuffix(" m")
         self.balanced_max_spin.setEnabled(False)
-        max_layout.addWidget(self.balanced_max_spin)
-        max_layout.addStretch()
-        balanced_layout.addLayout(max_layout)
+        self.balanced_max_spin.setFixedWidth(100)
+        row2_layout.addWidget(self.balanced_max_spin)
         
-        criteria_layout.addLayout(balanced_layout)
+        row2_layout.addStretch()
+        balanced_layout.addLayout(row2_layout)
+        
+        criteria_layout.addWidget(balanced_container)
         
         optimizer_layout.addWidget(criteria_group)
         
@@ -1996,15 +2057,16 @@ class VerticalAnalysisDialog(QDialog):
         
         button_layout = QHBoxLayout()
         
-        self.start_optimize_btn = QPushButton("▶ Start Optimization")
+        self.start_optimize_btn = QPushButton("Start Optimization")
         self.start_optimize_btn.setProperty("class", "primary")
         # self.start_optimize_btn.setMinimumHeight(30)
         button_layout.addWidget(self.start_optimize_btn)
-        
-        self.cancel_optimize_btn = QPushButton("✕ Cancel")
+
+        self.cancel_optimize_btn = QPushButton("Cancel")
         self.cancel_optimize_btn.setEnabled(False)
         self.cancel_optimize_btn.setProperty("class", "secondary")
         button_layout.addWidget(self.cancel_optimize_btn)
+
         
         optimizer_layout.addLayout(button_layout)
         
@@ -2067,13 +2129,17 @@ class VerticalAnalysisDialog(QDialog):
         results_layout.addWidget(self.top5_widget)
         
         optimizer_layout.addWidget(results_group)
+                
+        # Apply button - CENTERED
+        apply_layout = QHBoxLayout()
         
-        # Apply button
         self.apply_optimize_btn = QPushButton("Apply Best Tilt")
         self.apply_optimize_btn.setProperty("class", "primary")
         self.apply_optimize_btn.setEnabled(False)
-        optimizer_layout.addWidget(self.apply_optimize_btn)
+        self.apply_optimize_btn.setMaximumWidth(130)
+        apply_layout.addWidget(self.apply_optimize_btn)
         
+        optimizer_layout.addLayout(apply_layout)
         
         # =====================================================
         # EXPORT RESULTS - COLLAPSIBLE PANEL (SEPERTI TOP 5)
@@ -2174,22 +2240,35 @@ class VerticalAnalysisDialog(QDialog):
         
         profile_header.addStretch()
         
-        self.reset_view_btn = QPushButton("↺ Reset View")
-        self.reset_view_btn.setFixedSize(90, 25)
+        # Tombol Reset View dengan icon + teks
+        self.reset_view_btn = QPushButton(" Reset View")
+        reset_icon_path = os.path.join(icons_dir, 'reset.svg')
+        if os.path.exists(reset_icon_path):
+            self.reset_view_btn.setIcon(QIcon(reset_icon_path))
+            self.reset_view_btn.setIconSize(QtCore.QSize(22, 22))
+            self.reset_view_btn.setToolTip("Reset graph to optimal view after zoom/drag")
+        else:
+            self.reset_view_btn.setText("↺ Reset View")
+            self.reset_view_btn.setToolTip("Reset graph to optimal view after zoom/drag")
         self.reset_view_btn.setProperty("class", "secondary")
-        self.reset_view_btn.setToolTip("Reset graph to optimal view after zoom/drag")
+        self.reset_view_btn.setFixedHeight(30)
+        self.reset_view_btn.setMinimumWidth(100)
+        self.reset_view_btn.clicked.connect(self._reset_graph_view)
+        
         profile_header.addWidget(self.reset_view_btn)
         
         profile_layout.addLayout(profile_header)
 
+        # =====================================================
+        # BUAT PROFILE WIDGET
+        # =====================================================
         self.profile_widget = TerrainProfileWidget()
         
         # Set initial unit system
         is_metric = self.unit_combo.currentIndex() == 0
         self.profile_widget.set_unit_system(is_metric)
-
+        
         profile_layout.addWidget(self.profile_widget)
-
         
         # -----------------------------------------------------
         # MAP CARD
@@ -2201,8 +2280,9 @@ class VerticalAnalysisDialog(QDialog):
         map_layout = QVBoxLayout()
         map_card.setLayout(map_layout)
 
+        
         # =====================================================
-        # MAP HEADER DENGAN TOMBOL EXPORT KMZ
+        # MAP HEADER DENGAN TOOLBAR NAVIGASI & TOMBOL EXPORT KMZ
         # =====================================================
         
         map_header = QHBoxLayout()
@@ -2213,16 +2293,79 @@ class VerticalAnalysisDialog(QDialog):
         
         map_header.addStretch()
         
-        # Tombol Export KMZ dengan teks
-        self.export_kmz_btn = QPushButton("📤 Export KMZ")
+        # =====================================================
+        # NAVIGATION TOOLBAR
+        # =====================================================
+        
+        # Import QIcon
+        from PyQt5.QtGui import QIcon
+        import os
+        
+        # Path ke icons
+        plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        icons_dir = os.path.join(plugin_dir, 'resources', 'icons')
+        
+        # Zoom In button
+        self.zoom_in_btn = QPushButton()
+        zoom_in_path = os.path.join(icons_dir, 'zoom_in.svg')
+        if os.path.exists(zoom_in_path):
+            self.zoom_in_btn.setIcon(QIcon(zoom_in_path))
+            self.zoom_in_btn.setIconSize(QtCore.QSize(22, 22))
+        else:
+            self.zoom_in_btn.setText("🔍+")
+        self.zoom_in_btn.setProperty("class", "secondary")
+        self.zoom_in_btn.setFixedSize(30, 30)
+        self.zoom_in_btn.setToolTip("Zoom In (click or drag to select area)")
+        self.zoom_in_btn.clicked.connect(self._on_zoom_in_clicked)
+        map_header.addWidget(self.zoom_in_btn)
+        
+        # Zoom Out button
+        self.zoom_out_btn = QPushButton()
+        zoom_out_path = os.path.join(icons_dir, 'zoom_out.svg')
+        if os.path.exists(zoom_out_path):
+            self.zoom_out_btn.setIcon(QIcon(zoom_out_path))
+            self.zoom_out_btn.setIconSize(QtCore.QSize(22, 22))
+        else:
+            self.zoom_out_btn.setText("🔍-")
+        self.zoom_out_btn.setProperty("class", "secondary")
+        self.zoom_out_btn.setFixedSize(30, 30)
+        self.zoom_out_btn.setToolTip("Zoom Out")
+        self.zoom_out_btn.clicked.connect(self._on_zoom_out_clicked)
+        map_header.addWidget(self.zoom_out_btn)
+        
+        # Reset View button
+        self.reset_map_btn = QPushButton()
+        reset_view_path = os.path.join(icons_dir, 'view_default.svg')
+        if os.path.exists(reset_view_path):
+            self.reset_map_btn.setIcon(QIcon(reset_view_path))
+            self.reset_map_btn.setIconSize(QtCore.QSize(22, 22))
+        else:
+            self.reset_map_btn.setText("⟲")
+        self.reset_map_btn.setProperty("class", "secondary")
+        self.reset_map_btn.setFixedSize(30, 30)
+        self.reset_map_btn.setToolTip("Reset View to default")
+        self.reset_map_btn.clicked.connect(self._on_reset_map_clicked)
+        map_header.addWidget(self.reset_map_btn)
+        
+        # Spacer
+        map_header.addSpacing(10)
+        
+
+        # Tombol Export KMZ dengan icon + teks
+        self.export_kmz_btn = QPushButton(" Export to KMZ")
+        export_kmz_path = os.path.join(icons_dir, 'export_kmz.svg')
+        if os.path.exists(export_kmz_path):
+            self.export_kmz_btn.setIcon(QIcon(export_kmz_path))
+            self.export_kmz_btn.setIconSize(QtCore.QSize(22, 22))
+            self.export_kmz_btn.setToolTip("Export coverage footprint to KMZ")
+        else:
+            self.export_kmz_btn.setText("📤 KMZ")
+            self.export_kmz_btn.setToolTip("Export coverage footprint to KMZ file")
         self.export_kmz_btn.setProperty("class", "secondary")
         self.export_kmz_btn.setCursor(Qt.PointingHandCursor)
-        self.export_kmz_btn.setToolTip("Export coverage footprint to KMZ file")
+        self.export_kmz_btn.setFixedSize(30, 30)
+        self.export_kmz_btn.setMinimumWidth(120)  # Lebar cukup untuk icon + teks "KMZ"
         self.export_kmz_btn.clicked.connect(self._export_kmz)
-        
-        # Atur ukuran minimal agar konsisten dengan tombol Reset View
-        # self.export_kmz_btn.setMinimumHeight(25)
-        self.export_kmz_btn.setMinimumWidth(100)
         
         map_header.addWidget(self.export_kmz_btn)
         
@@ -2506,20 +2649,21 @@ class VerticalAnalysisDialog(QDialog):
             if hasattr(self.controller.engine, 'sampler') and self.controller.engine.sampler is not None:
                 print("  🧹 Clearing terrain cache...")
                 try:
-                    self.controller.engine.sampler.clear_cache()
+                    self.controller.engine.sampler.cleanup()  # <-- GUNAKAN METHOD BARU
                 except Exception as e:
                     print(f"  ⚠️ Error clearing cache: {e}")
-        
+
         # =====================================================
-        # CLEAR INTERSECTION CACHE
+        # CLEAR INTERSECTION CACHE (FORCE CLEANUP)
         # =====================================================
         try:
             from ...core.rf_engine.intersection_solver import IntersectionCache
             cache = IntersectionCache()
-            cache.clear()
+            cache.cleanup()  # <-- GUNAKAN METHOD BARU
             print("  🧹 Intersection cache cleared")
         except Exception as e:
             pass
+
         
         # =====================================================
         # FORCE GARBAGE COLLECTION
@@ -4128,7 +4272,7 @@ class VerticalAnalysisDialog(QDialog):
                     metadata_rows = [
                         ["Export Time", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
                         ["Plugin Version", "1.0.0"],
-                        ["Support", "🌐 Buy Me a Coffee: https://buymeacoffee.com/achmad.amrulloh"],
+                        ["Support", "🌐 Buy Me a Coffee: https://buymeacoffee.com/achmad.amrulloh, 🇮🇩 Saweria: https://saweria.co/achmadamrulloh"],
                         ["", "🇮🇩 Saweria: https://saweria.co/achmadamrulloh"],
                         ["", ""],
                         ["SITE PARAMETERS", ""],
@@ -4602,6 +4746,7 @@ class VerticalAnalysisDialog(QDialog):
             result["lower_beam"],
             display_impact,
             mech_tilt=params["mech"],
+            elec_tilt=params["elec"],  # <-- TAMBAHKAN INI
             beamwidth=params["beamwidth"],
             main_intersection_distance=main_intersection,
             upper_intersection_distance=upper_intersection,
@@ -5184,7 +5329,7 @@ class VerticalAnalysisDialog(QDialog):
     # =====================================================
 
     def _export_kmz(self):
-        """Export current analysis to KMZ"""
+        """Export current analysis to KMZ with complete RF visualization"""
         
         if not hasattr(self, 'last_result') or not self.last_result:
             self.status_label.setText("No analysis to export")
@@ -5213,11 +5358,21 @@ class VerticalAnalysisDialog(QDialog):
                 )
                 return
             
-            # Get parameters
+            # Get parameters from result
             footprint_start = result.get("footprint_start_distance")
             footprint_end = result.get("footprint_end_distance")
             impact_point = result.get("impact_point")
             
+            # Get intersection distances
+            upper_intersection_dist = result.get("upper_intersection_distance")
+            lower_intersection_dist = result.get("lower_intersection_distance")
+            main_intersection_dist = result.get("main_intersection_distance") or result.get("impact_distance")
+            
+            # Get azimuth and beamwidth from UI
+            azimuth = self.azimuth_spin.value()
+            h_beamwidth = self.h_beamwidth_spin.value()
+            
+            # Validate footprint data
             if not footprint_start or not footprint_end:
                 QMessageBox.warning(
                     self, 
@@ -5228,26 +5383,145 @@ class VerticalAnalysisDialog(QDialog):
                 )
                 return
             
-            # Call exporter
+            # =====================================================
+            # FIX: HARCODE SECTOR RADIUS & BEAM END KE 5000m
+            # =====================================================
+            SECTOR_RADIUS_HARDCODE = 5000  # meters
+            print(f"📡 Using hardcoded sector radius: {SECTOR_RADIUS_HARDCODE}m")
+            
+            upper_point = None
+            lower_point = None
+            beam_end_point = None
+            center_line_points = None
+            beam_edges_points = None
+            sector_radius = SECTOR_RADIUS_HARDCODE  # ← FORCE KE 5000m
+            
+            # Helper function to project point
+            def project_point(distance):
+                if distance is None or distance <= 0:
+                    return None
+                point_lat, point_lon = self._project_point(lat, lon, azimuth, distance)
+                return QgsPointXY(point_lon, point_lat)
+            
+            # Upper intersection point (blue) - tetap pakai hasil perhitungan
+            if upper_intersection_dist and upper_intersection_dist > 0:
+                upper_point = project_point(upper_intersection_dist)
+                print(f"  📍 Upper intersection: {upper_intersection_dist:.0f}m")
+            
+            # Lower intersection point (red) - tetap pakai hasil perhitungan
+            if lower_intersection_dist and lower_intersection_dist > 0:
+                lower_point = project_point(lower_intersection_dist)
+                print(f"  📍 Lower intersection: {lower_intersection_dist:.0f}m")
+            
+            # =====================================================
+            # BEAM END POINT - FORCE KE 5000m (bukan 2x main intersection)
+            # =====================================================
+            beam_end_point = project_point(SECTOR_RADIUS_HARDCODE)
+            
+            # Center line (red line from site to beam end at 5000m)
+            if beam_end_point:
+                center_line_points = [site_point, beam_end_point]
+                print(f"  📍 Beam end point (hardcoded): {SECTOR_RADIUS_HARDCODE:.0f}m")
+            
+            # Beam edges (black dashed lines) - left and right edges
+            half_bw = h_beamwidth / 2
+            left_angle = azimuth - half_bw
+            right_angle = azimuth + half_bw
+            
+            left_point_lat, left_point_lon = self._project_point(lat, lon, left_angle, SECTOR_RADIUS_HARDCODE)
+            right_point_lat, right_point_lon = self._project_point(lat, lon, right_angle, SECTOR_RADIUS_HARDCODE)
+            
+            left_edge_point = QgsPointXY(left_point_lon, left_point_lat)
+            right_edge_point = QgsPointXY(right_point_lon, right_point_lat)
+            
+            beam_edges_points = [
+                [site_point, left_edge_point],
+                [site_point, right_edge_point]
+            ]
+            print(f"  📍 Beam edges (hardcoded): left={left_angle:.1f}°, right={right_angle:.1f}°, radius={SECTOR_RADIUS_HARDCODE}m")
+            
+            # =====================================================
+            # CALL EXPORTER WITH ALL PARAMETERS
+            # =====================================================
+            
             success = self.kmz_exporter.export_sector(
                 site_point=site_point,
-                azimuth=self.azimuth_spin.value(),
-                h_beamwidth=self.h_beamwidth_spin.value(),
+                azimuth=azimuth,
+                h_beamwidth=h_beamwidth,
                 footprint_start=footprint_start,
                 footprint_end=footprint_end,
-                impact_point=impact_point
+                impact_point=impact_point,
+                upper_intersection_point=upper_point,
+                lower_intersection_point=lower_point,
+                beam_end_point=beam_end_point,
+                center_line_points=center_line_points,
+                beam_edges_points=beam_edges_points,
+                sector_radius=sector_radius  # ← SEKARANG 5000m!
             )
             
-            if success:
-                self.status_label.setText("KMZ export successful")
+            # Handle response: True = success, False = error, None = cancelled
+            if success is None:
+                self.status_label.setText("KMZ export cancelled")
+                print("📁 KMZ export cancelled by user")
+                return
+            elif success:
+                self.status_label.setText("✅ KMZ export successful")
+                QMessageBox.information(
+                    self,
+                    "Export Successful",
+                    "KMZ file has been saved successfully.\n\n"
+                    "You can now open it in Google Earth for further visualization.\n\n"
+                    f"• Sector radius: {SECTOR_RADIUS_HARDCODE}m\n"
+                    f"• Beam end at: {SECTOR_RADIUS_HARDCODE}m"
+                )
+                print("✅ KMZ export successful")
             else:
-                self.status_label.setText("KMZ export failed")
+                self.status_label.setText("❌ KMZ export failed")
+                QMessageBox.critical(
+                    self,
+                    "Export Failed",
+                    "An error occurred while exporting to KMZ.\n\n"
+                    "Please check the QGIS Log Messages panel for details."
+                )
+                print("❌ KMZ export failed")
             
         except Exception as e:
             self._log(f"KMZ export failed: {e}", Qgis.Warning)
-            QMessageBox.critical(self, "Export Failed", str(e))
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(
+                self, 
+                "Export Failed", 
+                f"An unexpected error occurred:\n\n{str(e)}"
+            )
     
+    # =====================================================
+    # MAP NAVIGATION SLOTS
+    # =====================================================
     
+    def _on_zoom_in_clicked(self):
+        """
+        Handle zoom in button click
+        """
+        if hasattr(self.map_widget, 'zoom_in'):
+            self.map_widget.zoom_in()
+            print("🔍 Zoom in clicked")
+    
+    def _on_zoom_out_clicked(self):
+        """
+        Handle zoom out button click
+        """
+        if hasattr(self.map_widget, 'zoom_out'):
+            self.map_widget.zoom_out()
+    
+    def _on_reset_map_clicked(self):
+        """
+        Handle reset map button click
+        """
+        if hasattr(self.map_widget, 'reset_view'):
+            self.map_widget.reset_view()
+            
+            
     def _update_distance_from_slider(self, slider_value):
         """Update distance spinbox based on slider value and unit"""
         is_metric = self.unit_combo.currentIndex() == 0
