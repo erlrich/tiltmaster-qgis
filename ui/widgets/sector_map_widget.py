@@ -144,7 +144,21 @@ class SectorMapWidget(QWidget):
         
         # CREATE METRICS OVERLAY
         self._create_metrics_overlay()
-
+        
+        # ======================================================
+        # SETUP NAVIGATION TOOLS
+        # ======================================================
+        self._setup_navigation_tools()
+        
+        # Save extent for reset view
+        self._saved_extent = None
+        self._zoom_in_mode = False
+        
+        # Create dummy actions for tools (required by QgsMapTool)
+        from qgis.PyQt.QtWidgets import QAction
+        self._pan_action = QAction("Pan", self)
+        self._zoom_action = QAction("Zoom", self)
+        
         # ======================================================
         # DEBUG PRINT
         # ======================================================
@@ -359,48 +373,122 @@ class SectorMapWidget(QWidget):
     # BASEMAP METHODS
     # ======================================================
     
+    # ======================================================
+    # GANTI method 'set_basemap' yang lama dengan versi ini
+    # ======================================================
     def set_basemap(self, layer_name=None):
         """
-        Set basemap dari layer yang ada di project
-        
-        Parameters
-        ----------
-        layer_name : str or None
-            Nama layer raster yang akan digunakan sebagai basemap.
-            Jika None, gunakan default OSM dari URL.
+        Set basemap dari layer project, atau load default OSM.
+        MEMAKSA rebuild ulang layer stack canvas.
         """
         print(f"🔄 Setting basemap to: {layer_name if layer_name else 'Default OSM'}")
-        
-        # Hapus basemap lama
+
+        # 1. Hapus referensi OSM layer lama
         if self._osm_layer and self._osm_layer.isValid():
-            # Hanya hapus dari canvas, jangan dari project
-            all_layers = list(self.canvas.layers())
-            if self._osm_layer in all_layers:
-                all_layers.remove(self._osm_layer)
-                self.canvas.setLayers(all_layers)
             self._osm_layer = None
-        
+            print("  🧹 Cleared previous basemap reference.")
+
+        # 2. Load basemap baru
         if layer_name is None:
-            # Load default OSM
             self._load_osm_basemap()
         else:
-            # Cari layer di project
             project = QgsProject.instance()
             layers = project.mapLayersByName(layer_name)
-            
+
             if layers:
                 self._osm_layer = layers[0]
                 print(f"✅ Using basemap: {layer_name}")
+                if hasattr(self._osm_layer, 'setCrs'):
+                    self._osm_layer.setCrs(QgsCoordinateReferenceSystem("EPSG:3857"))
             else:
                 print(f"⚠️ Basemap layer '{layer_name}' not found, using default OSM")
                 self._load_osm_basemap()
+
+        # 3. CRITICAL: Rebuild ulang layer stack
+        self._rebuild_canvas_layers()
+
+        # 4. Pastikan overlay di atas setelah rebuild
+        QTimer.singleShot(100, self._ensure_overlay_on_top)
+
+    # ======================================================
+    # TAMBAHKAN method baru ini setelah method 'set_basemap'
+    # ======================================================
+    def _rebuild_canvas_layers(self):
+        """
+        Memaksa rebuild ulang layer stack canvas.
+        Urutan layer SAMA PERSIS dengan _fix_z_order().
+        """
+        print("🔄 Rebuilding canvas layer stack...")
+        all_layers = []
         
-        # Update canvas layers
-        self._update_canvas_layers()
-        self.canvas.refresh()  # <-- PASTIKAN INI ADA
+        # ======================================================
+        # URUTAN SAMA PERSIS DENGAN _fix_z_order()
+        # ======================================================
         
-        # Pastikan overlay di atas setelah ganti basemap
-        QTimer.singleShot(200, self._ensure_overlay_on_top)
+        # LAPISAN ATAS - Titik-titik (point)
+        if self._antenna_layer and self._antenna_layer.isValid():
+            all_layers.append(self._antenna_layer)
+            print("  - RF_Antenna")
+        
+        if self._impact_layer and self._impact_layer.isValid():
+            all_layers.append(self._impact_layer)
+            print("  - RF_Impact")
+        
+        if self._beam_end_layer and self._beam_end_layer.isValid():
+            all_layers.append(self._beam_end_layer)
+            print("  - RF_BeamEnd")
+        
+        if self._upper_intersection_layer and self._upper_intersection_layer.isValid():
+            all_layers.append(self._upper_intersection_layer)
+            print("  - RF_UpperIntersection")
+
+        if self._lower_intersection_layer and self._lower_intersection_layer.isValid():
+            all_layers.append(self._lower_intersection_layer)
+            print("  - RF_LowerIntersection")
+        
+        if self._center_layer and self._center_layer.isValid():
+            all_layers.append(self._center_layer)
+            print("  - RF_CenterLine")
+        
+        # LAPISAN BAWAH - Area luas (polygon)
+        if self._footprint_layer and self._footprint_layer.isValid():
+            all_layers.append(self._footprint_layer)
+            print("  - RF_Footprint")
+        
+        if self._sector_layer and self._sector_layer.isValid():
+            all_layers.append(self._sector_layer)
+            print("  - RF_Sector")
+        
+        # LAPISAN TENGAH - Garis putus (line)
+        if self._beam_layer and self._beam_layer.isValid():
+            all_layers.append(self._beam_layer)
+            print("  - RF_BeamEdges")
+        
+        # OSM DI PALING ATAS
+        if self._osm_layer and self._osm_layer.isValid():
+            all_layers.append(self._osm_layer)
+            print("  - OSM Basemap (TOP)")
+        else:
+            print("  - No OSM basemap to add")
+        
+        # LOS layer (tambahan)
+        if self._los_layer and self._los_layer.isValid():
+            all_layers.append(self._los_layer)
+            print("  - RF_LOS")
+        
+        # Set layer list ke canvas
+        if all_layers:
+            self.canvas.setLayers(all_layers)
+            print(f"✅ Canvas rebuilt with {len(all_layers)} layers.")
+        else:
+            print("❌ No valid layers to display.")
+        
+        # Force refresh canvas
+        self.canvas.refresh()
+        
+        # Raise overlays
+        if hasattr(self, 'raise_overlays'):
+            self.raise_overlays()
         
     # ======================================================
     # DEFAULT VIEW METHODS
@@ -903,7 +991,97 @@ class SectorMapWidget(QWidget):
         # ===== TAMBAHKAN: Second attempt with delay =====
         from PyQt5.QtCore import QTimer
         QTimer.singleShot(100, self._ensure_overlay_on_top)
+    
+    # ======================================================
+    # MAP NAVIGATION METHODS
+    # ======================================================
+    
+    def _setup_navigation_tools(self):
+        """
+        Setup map tools - hanya pan tool yang digunakan
+        Zoom in/out dilakukan via method, bukan map tool
+        """
+        from qgis.gui import QgsMapToolPan
         
+        # Pan tool (default)
+        self._pan_tool = QgsMapToolPan(self.canvas)
+        
+        # Set default mode
+        self.set_pan_mode()
+        
+        print("✅ Navigation tools initialized")
+    
+    def set_pan_mode(self):
+        """
+        Set canvas ke mode pan (default mode)
+        Kursor: hand
+        """
+        self.canvas.setCursor(Qt.OpenHandCursor)
+        self.canvas.setMapTool(self._pan_tool)
+        print("🖱️ Pan mode activated")
+    
+    def zoom_in(self):
+        """
+        Zoom in satu level (center tetap di tengah canvas)
+        """
+        # Get current extent
+        extent = self.canvas.extent()
+        
+        # Zoom in by factor 0.8 (lebih kecil = lebih zoom in)
+        center = extent.center()
+        width = extent.width()
+        height = extent.height()
+        
+        new_extent = QgsRectangle(
+            center.x() - width * 0.4,
+            center.y() - height * 0.4,
+            center.x() + width * 0.4,
+            center.y() + height * 0.4
+        )
+        
+        self.canvas.setExtent(new_extent)
+        self.canvas.refresh()
+        
+        print("🔍 Zoomed in")
+    
+    def zoom_out(self):
+        """
+        Zoom out satu level (center tetap di tengah canvas)
+        """
+        # Get current extent
+        extent = self.canvas.extent()
+        
+        # Zoom out by factor 1.2
+        center = extent.center()
+        width = extent.width()
+        height = extent.height()
+        
+        new_extent = QgsRectangle(
+            center.x() - width * 0.6,
+            center.y() - height * 0.6,
+            center.x() + width * 0.6,
+            center.y() + height * 0.6
+        )
+        
+        self.canvas.setExtent(new_extent)
+        self.canvas.refresh()
+        
+        print("🔍 Zoomed out")
+    
+    def reset_view(self):
+        """
+        Reset view ke tampilan optimal (saved extent dari analysis)
+        """
+        if hasattr(self, '_saved_extent') and self._saved_extent:
+            self.canvas.setExtent(self._saved_extent)
+            self.canvas.refresh()
+            print("⟲ View reset to default")
+        else:
+            print("⚠️ No saved extent available, using smart zoom")
+            self._smart_zoom()
+        
+        # Pastikan tetap di pan mode
+        self.set_pan_mode()
     
     # ======================================================
     # SHOW EVENT
@@ -1056,6 +1234,11 @@ class SectorMapWidget(QWidget):
             )
             
             self.canvas.setExtent(rect)
+            
+            # ======================================================
+            # SAVE EXTENT FOR RESET VIEW
+            # ======================================================
+            self._saved_extent = rect
             self.canvas.refresh()
 
 
@@ -1174,6 +1357,13 @@ class SectorMapWidget(QWidget):
             )
             
             self.canvas.setExtent(rect)
+            
+            # ======================================================
+            # SAVE EXTENT FOR RESET VIEW
+            # ======================================================
+            self._saved_extent = rect
+            print(f"💾 Saved extent for reset view")
+
             self.canvas.refresh()
 
             

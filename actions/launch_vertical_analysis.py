@@ -34,25 +34,41 @@ from ..modules.vertical_analysis.module import VerticalAnalysisModule
 def launch_vertical_analysis():
 
     # ======================================================
-    # FIND DEM LAYER
+    # FIND DEM LAYER - DENGAN FILTER LEBIH PINTAR
     # ======================================================
 
     dem_layer = None
-
+    
+    # Cari layer raster yang memiliki band elevation (bukan basemap)
     for lyr in QgsProject.instance().mapLayers().values():
-
+        
         if lyr.type() == lyr.RasterLayer:
-
-            dem_layer = lyr
-            break
-
+            layer_name = lyr.name().lower()
+            
+            # Skip basemap layers (biasanya mengandung kata tertentu)
+            skip_keywords = ['bing', 'osm', 'openstreetmap', 'google', 'map', 'satellite', 'imagery', 'basemap']
+            is_basemap = any(keyword in layer_name for keyword in skip_keywords)
+            
+            if not is_basemap:
+                dem_layer = lyr
+                print(f"✅ Found DEM layer: {lyr.name()}")
+                break
+    
     if dem_layer is None:
-
+        # Fallback: ambil raster layer pertama yang bukan basemap
+        for lyr in QgsProject.instance().mapLayers().values():
+            if lyr.type() == lyr.RasterLayer:
+                dem_layer = lyr
+                print(f"⚠️ Using fallback raster layer: {lyr.name()}")
+                break
+    
+    if dem_layer is None:
         iface.messageBar().pushCritical(
             "Vertical Analysis",
-            "DEM layer not found in current project."
+            "DEM layer not found in current project.\n\n"
+            "Please load a DEM raster layer (e.g., SRTM, ASTER, or local DEM) "
+            "before running analysis."
         )
-
         return
 
     # ======================================================

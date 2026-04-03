@@ -84,7 +84,7 @@ class MapLegendFrame(QFrame):
         # Static legend items
         items = [
             # Point items
-            {"label": "Antenna", "color": QColor(0, 0, 0), "type": "point", "border": "white"},
+            {"label": "Antenna", "color": QColor(0, 0, 0), "type": "point", "border": "white", "shape": "triangle"},  # <-- TAMBAHKAN shape
             {"label": "Impact (Main Beam)", "color": QColor(0, 160, 0), "type": "point", "border": "black"},
             {"label": "Beam End", "color": QColor(0, 255, 0), "type": "point", "border": "white"},
             {"label": "Upper Intersection", "color": QColor(0, 0, 225), "type": "point", "border": "white"},

@@ -311,3 +311,13 @@ class IntersectionCache:
             'size': len(self._cache),
             'maxsize': self._maxsize
         }
+    
+    # ======================================================
+    # TAMBAHKAN method ini ke class IntersectionCache
+    # ======================================================
+    def cleanup(self):
+        """
+        Force clear cache dan release memory.
+        """
+        self.clear()
+        print("🧹 IntersectionCache fully cleared.")

@@ -58,10 +58,15 @@ class BeamGeometry:
     # ======================================================
     # MAIN CALCULATION
     # ======================================================
-
+    
+    
     def compute(self):
         """
         Compute beam geometry.
+
+        Visual offset ditambahkan pada upper beam agar garis tidak horizontal.
+        Di real world, sinyal masih ada di luar -3dB beamwidth (half power),
+        sehingga upper beam seharusnya masih sedikit menunduk.
 
         Returns
         -------
@@ -72,8 +77,16 @@ class BeamGeometry:
 
         half_bw = self.beamwidth / 2.0
 
+        # =====================================================
+        # VISUAL OFFSET: Agar upper beam tidak horizontal
+        # Offset 0.2° membuat visualisasi lebih realistis
+        # Nilai ini TIDAK mempengaruhi perhitungan impact distance
+        # karena impact distance tetap menggunakan main beam
+        # =====================================================
+        VISUAL_OFFSET = 0.2  # derajat
+
         main_beam = total_tilt
-        upper_beam = total_tilt - half_bw
+        upper_beam = total_tilt - half_bw + VISUAL_OFFSET  # Tambah offset
         lower_beam = total_tilt + half_bw
 
         return {
@@ -85,6 +98,7 @@ class BeamGeometry:
             "upper_beam": upper_beam,
             "lower_beam": lower_beam
         }
+
 
     # ======================================================
     # GROUND INTERSECTION

@@ -40,10 +40,22 @@ class VerticalAnalysisController:
     """
 
     def __init__(self, dem_layer):
+        # =====================================================
+        # VALIDASI: Pastikan dem_layer adalah DEM, bukan basemap
+        # =====================================================
+        if dem_layer is not None:
+            layer_name = dem_layer.name().lower()
+            skip_keywords = ['bing', 'osm', 'openstreetmap', 'google', 'map', 'satellite', 'imagery', 'basemap']
+            is_basemap = any(keyword in layer_name for keyword in skip_keywords)
+            
+            if is_basemap:
+                raise ValueError(
+                    f"'{dem_layer.name()}' appears to be a basemap, not a DEM.\n\n"
+                    "Please load a valid DEM raster layer (e.g., SRTM, ASTER, or local elevation data)."
+                )
+        
         self.dem_layer = dem_layer
-
         self.engine = VerticalAnalysisEngine(dem_layer)
-        # self.map_engine = VerticalAnalysisMapEngine(iface)
 
     # ======================================================
     # RUN ANALYSIS FROM FEATURE
@@ -70,7 +82,16 @@ class VerticalAnalysisController:
                 "Please select a valid sector feature with point, line, or polygon geometry."
             )
 
-
+        # ======================================================
+        # VALIDASI DEM LAYER
+        # ======================================================
+        if not self.dem_layer or not self.dem_layer.isValid():
+            raise ValueError(
+                "Tidak ada DEM layer yang valid di project.\n\n"
+                "Pastikan DEM raster layer sudah dimuat dan dapat diakses."
+            )
+            
+            
         # ======================================================
         # GET SITE POINT
         # ======================================================

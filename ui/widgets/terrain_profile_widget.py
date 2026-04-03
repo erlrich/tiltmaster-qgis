@@ -35,7 +35,7 @@ Menampilkan:
 import os
 import math
 import traceback  # <-- TAMBAHKAN INI
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QFrame, QLabel, QMessageBox  # <-- TAMBAHKAN QMessageBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QMessageBox
 from PyQt5 import QtCore
 from PyQt5.QtGui import QLinearGradient, QColor, QBrush
 from .profile_legend_frame import ProfileLegendFrame
@@ -137,7 +137,10 @@ class TerrainProfileWidget(QWidget):
         # ======================================================
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
         self.setLayout(layout)
+
 
         # ======================================================
         # CREATE EMPTY PLACEHOLDER
@@ -146,18 +149,25 @@ class TerrainProfileWidget(QWidget):
         self.plot = None
         self.plot_item = None
 
+
         # ======================================================
         # CEK KETERSEDIAAN PYQTGRAPH
         # ======================================================
         if not PYQTGRAPH_AVAILABLE:
+            # Buat link ke GitHub troubleshooting guide
+            # Ganti 'username/repo' dengan repository GitHub Anda yang sebenarnya
+            github_repo = "https://github.com/erlrich/tiltmaster-qgis"
+            troubleshooting_url = f"{github_repo}/blob/main/TROUBLESHOOTING.md#pyqtgraph-not-installed"
+            
             error_label = QLabel(
-                f"<b>⚠️ PyQtGraph Tidak Terinstall</b><br><br>"
-                f"TiltMaster membutuhkan PyQtGraph untuk menampilkan terrain profile.<br><br>"
-                f"Install dengan perintah:<br>"
- f"<code>pip install pyqtgraph</code><br><br>"
+                f"<b>⚠️ PyQtGraph Not Installed</b><br><br>"
+                f"TiltMaster requires PyQtGraph to display the terrain profile.<br><br>"
+                f"<b>How to install PyQtGraph - Using OSGeo4W (Windows):</b><br>"
+                f"<a href='{troubleshooting_url}'>Click here for detailed troubleshooting guide</a><br><br>"
                 f"<small>Error: {PG_IMPORT_ERROR}</small>"
             )
             error_label.setWordWrap(True)
+            error_label.setOpenExternalLinks(True)  # Aktifkan klik link
             error_label.setStyleSheet("""
                 QLabel {
                     color: #c1121f;
@@ -173,6 +183,13 @@ class TerrainProfileWidget(QWidget):
                     padding: 2px 5px;
                     border-radius: 3px;
                     font-family: monospace;
+                }
+                a {
+                    color: #0c6075;
+                    text-decoration: none;
+                }
+                a:hover {
+                    text-decoration: underline;
                 }
             """)
             error_label.setAlignment(Qt.AlignCenter)
@@ -284,13 +301,7 @@ class TerrainProfileWidget(QWidget):
         # ======================================================
         
         self._intersection_labels = []  # List untuk menyimpan label intersection
-        
-        # ======================================================
-        # HEADER ITEMS (BARU)
-        # ======================================================
-        
-        self._header_items = []
-        
+                
         # ======================================================
         # IMPACT POINT TRACKING (BARU)
         # ======================================================
@@ -611,6 +622,7 @@ class TerrainProfileWidget(QWidget):
         lower_beam_angle,
         impact_distance=None,
         mech_tilt=None,
+        elec_tilt=None,  # <-- TAMBAHKAN INI
         beamwidth=None,
         # PARAMETER BARU
         main_intersection_distance=None,
@@ -1420,64 +1432,6 @@ class TerrainProfileWidget(QWidget):
                 band.setZValue(-10)
                 self.plot_item.addItem(band)
         
-        # ======================================================
-        # HEADER INFO (MAIN HIT, DOWNTILT, V-BW)
-        # ======================================================
-        
-        try:
-            # Tentukan unit system
-            is_metric = getattr(self, '_axis_units', 'metric') == 'metric'
-            
-            # Hitung main hit dengan unit yang sesuai
-            if impact_distance:
-                if is_metric:
-                    if impact_distance >= 1000:
-                        header1 = f"Main hit: {impact_distance/1000:.2f} km"
-                    else:
-                        header1 = f"Main hit: {impact_distance:.0f} m"
-                else:
-                    impact_ft = impact_distance * 3.28084
-                    if impact_ft >= 5280:
-                        header1 = f"Main hit: {impact_ft/5280:.2f} mi"
-                    else:
-                        header1 = f"Main hit: {impact_ft:.0f} ft"
-            else:
-                header1 = "Main hit: —"
-            
-            # Format downtilt dan beamwidth
-            if mech_tilt is not None and beamwidth is not None:
-                header2 = f"Downtilt {mech_tilt:.1f}°   V-BW {beamwidth:.1f}°"
-            else:
-                header2 = ""
-            
-            header_text = f"{header1}   {header2}"
-            
-            # Buat header text item
-            header = pg.TextItem(
-                header_text,
-                anchor=(0.5, 0),
-                color=(0, 0, 0),
-                html=None
-            )
-            
-            # Posisi header di tengah atas
-            mid_x = distances[len(distances)//2]
-            max_y_plot = max(elevations) + antenna_height + 30
-            header.setPos(mid_x, max_y_plot)
-            header.setZValue(200)
-            
-            self.plot_item.addItem(header)
-            
-            # Simpan untuk cleanup
-            if not hasattr(self, '_header_items'):
-                self._header_items = []
-            self._header_items.append(header)
-            
-            print(f"✅ Header added: {header_text}")
-            
-        except Exception as e:
-            print(f"Error adding header: {e}")
-                   
                    
         # ======================================================
         # STORE DATA
@@ -1858,18 +1812,28 @@ class TerrainProfileWidget(QWidget):
             import traceback
             traceback.print_exc()
 
+    # ======================================================
+    # GANTI method '_remove_tower' yang lama dengan versi ini
+    # ======================================================
     def _remove_tower(self):
-        """Remove existing tower item from scene"""
+        """Remove existing tower item from scene with extra safety checks."""
         if hasattr(self, '_tower_item') and self._tower_item is not None:
             try:
-                # Hapus dari scene jika masih ada
+                # Cek apakah item masih memiliki scene dan masih valid
                 if self._tower_item.scene() is not None:
                     self._tower_item.scene().removeItem(self._tower_item)
                 self._tower_item = None
-                self._tower_params = None  # <-- PASTIKAN INI ADA
-                print("🧹 Previous tower removed")
+                self._tower_params = None
+                print("🧹 Previous tower removed (or was already dead).")
+            except RuntimeError as e:
+                # Error umum ketika C++ object sudah dihapus
+                print(f"⚠️ Ignoring RuntimeError during tower removal: {e}")
+                self._tower_item = None
+                self._tower_params = None
             except Exception as e:
                 print(f"⚠️ Error removing tower: {e}")
+                self._tower_item = None
+                self._tower_params = None
                 
             
     def _position_legend_top_right(self):
@@ -2151,16 +2115,6 @@ class TerrainProfileWidget(QWidget):
                 pass
             self.beam_fill = None
         
-        # =====================================================
-        # HAPUS HEADER ITEMS (text di atas)
-        # =====================================================
-        if hasattr(self, '_header_items'):
-            for item in self._header_items:
-                try:
-                    self.plot_item.removeItem(item)
-                except:
-                    pass
-            self._header_items = []
         
         # =====================================================
         # HAPUS SHADOW BANDS (LinearRegionItem)
@@ -2243,6 +2197,7 @@ class TerrainProfileWidget(QWidget):
         self._last_upper_y = None
         self._last_lower_x = None
         self._last_lower_y = None
+
         
         # =====================================================
         # RESET AXIS RANGE (opsional - kembali ke default)
@@ -2257,3 +2212,5 @@ class TerrainProfileWidget(QWidget):
         # Refresh plot
         self.plot_item.update()
         print("✅ Terrain profile plot cleared")
+    
+    

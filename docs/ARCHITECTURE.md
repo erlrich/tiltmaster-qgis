@@ -3,6 +3,7 @@
 ## 📋 Overview
 
 TiltMaster is a QGIS plugin for RF Vertical Analysis, designed for telecommunication engineers to perform vertical beam analysis, terrain intersection detection, coverage footprint calculation, and tilt optimization.
+Current version: **1.1.0** (2026-04-03)
 
 ## 🏗️ Project Structure
 TiltMaster/
@@ -82,9 +83,16 @@ TiltMaster/
 │ └── logging_utils.py # Logging utilities
 │
 ├── resources/ # Static resources
-│ └── icons/
-│ ├── tower.svg # Tower icon for profile
-│ └── vertical_visual.png # Plugin icon
+│   ├── legend/
+│   │   └── legend.png          # PNG legend untuk KMZ export
+│   │
+│ 	└── icons/
+│	 	├── tower.svg # Tower icon for profile
+│       ├── information.png     # Icon untuk About dialog
+│       ├── zoom-in.svg         # Navigation toolbar icons
+│       ├── zoom-out.svg
+│       ├── reset-view.svg
+│	 	└── vertical_visual.png # Plugin icon
 │
 └── docs/ # Documentation
 └── ARCHITECTURE.md # This file
@@ -136,6 +144,18 @@ User starts optimization in dialog
 
 
 
+### 5. **KMZ Export Flow**
+User clicks Export KMZ button
+→ utils/kmz_exporter.py
+→ Checks for legend.png in resources/legend/
+→ Generates KML with ScreenOverlay (PNG legend)
+→ Creates temporary folder
+→ Compresses KML + legend.png into .kmz (ZIP)
+→ Cleans up temporary files
+→ Opens save dialog
+
+
+
 ## 🧩 Key Components
 
 ### Core Engine (`core/`)
@@ -158,8 +178,12 @@ User starts optimization in dialog
 - **Legend Frames**: Draggable legend overlays for map and profile
 
 ### Utilities (`utils/`)
-- **KMZExporter**: Exports analysis results to Google Earth format
-- **LoggingUtils**: Centralized logging
+- **KMZExporter**: Exports analysis results to Google Earth KMZ format
+  - PNG legend overlay (top-left, 180px width)
+  - Sector polygon with 5000m hardcoded radius
+  - Upper/Lower beam intersection points
+  - Beam end point at 5000m
+  - KMZ compression (ZIP with embedded PNG)
 
 ## 📊 Class Relationships
 VerticalAnalysisModule
@@ -198,6 +222,15 @@ class RFDefaults:
     MAX_DISTANCE = 3000          # meters
     SAMPLING_STEP = 30           # meters
     # ... more defaults
+
+## 🖼️ Resources
+
+### Legend PNG
+- Location: `resources/legend/legend.png`
+- Size: 400x360 pixels (HD)
+- Format: PNG with transparency
+- Used for: KMZ export ScreenOverlay
+- Generated once via script or manually
 	
 🌐 External Dependencies
 - QGIS: Core GIS functionality

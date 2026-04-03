@@ -104,6 +104,17 @@ class TerrainSampler:
             self._cache_access_time.clear()
             print(f"🧹 Cleared {cache_size} entries from terrain cache")
     
+    # ======================================================
+    # TAMBAHKAN method ini ke class TerrainSampler
+    # ======================================================
+    def cleanup(self):
+        """
+        Cleanup final untuk sampler, membersihkan cache.
+        Dipanggil saat analisis selesai atau dialog ditutup.
+        """
+        self.clear_cache()
+        print("🧹 TerrainSampler cache cleared.")
+    
     def get_cache_stats(self):
         """Get cache statistics - THREAD SAFE"""
         with self._cache_lock:
