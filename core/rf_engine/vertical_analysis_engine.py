@@ -425,6 +425,7 @@ class VerticalAnalysisEngine:
             print(f"⚠️ Footprint calculation error: {e}")
             pass
 
+
         # ======================================================
         # 6️⃣ IMPACT POINT
         # ======================================================
@@ -432,12 +433,49 @@ class VerticalAnalysisEngine:
         impact_point = None
 
         if impact_distance is not None:
-
             impact_point = self._project_point(
                 site_point,
                 azimuth,
                 impact_distance
             )
+
+        # ======================================================
+        # 7️⃣ UPPER & LOWER INTERSECTION POINTS (PATCH)
+        # ======================================================
+
+        upper_intersection_point = None
+        lower_intersection_point = None
+
+        if upper_intersection is not None:
+            upper_intersection_point = self._project_point(
+                site_point,
+                azimuth,
+                upper_intersection
+            )
+            print(f"  📍 Upper intersection point: ({upper_intersection_point.x():.6f}, {upper_intersection_point.y():.6f})")
+
+        if lower_intersection is not None:
+            lower_intersection_point = self._project_point(
+                site_point,
+                azimuth,
+                lower_intersection
+            )
+            print(f"  📍 Lower intersection point: ({lower_intersection_point.x():.6f}, {lower_intersection_point.y():.6f})")
+
+        # ======================================================
+        # 8️⃣ BEAM END POINT (Main beam end - PATCH)
+        # ======================================================
+
+        beam_end_point = None
+        main_beam_distance = beam_geom.get("distance_main")
+
+        if main_beam_distance is not None and main_beam_distance > 0:
+            beam_end_point = self._project_point(
+                site_point,
+                azimuth,
+                main_beam_distance
+            )
+            print(f"  📍 Beam end point (main beam): ({beam_end_point.x():.6f}, {beam_end_point.y():.6f}) at {main_beam_distance:.0f}m")
 
         # ======================================================
         # FINAL RESULT
@@ -462,13 +500,19 @@ class VerticalAnalysisEngine:
             # terrain intersection
             "intersection": intersection,
             
-            # intersection points
+            # intersection points (JARAK)
             "main_intersection_distance": main_intersection,
             "upper_intersection_distance": upper_intersection,
             "lower_intersection_distance": lower_intersection,
+            
+            # INTERSECTION POINTS (KOORDINAT) - PATCH
+            "upper_intersection_point": upper_intersection_point,
+            "lower_intersection_point": lower_intersection_point,
+            "beam_end_point": beam_end_point,
+            
             "shadow_regions": shadow_regions,
 
-            # BEAM HEIGHTS AT INTERSECTION - PASTIKAN INI ADA!
+            # BEAM HEIGHTS AT INTERSECTION
             "main_beam_height": main_beam_height,
             "upper_beam_height": upper_beam_height,
             "lower_beam_height": lower_beam_height,
