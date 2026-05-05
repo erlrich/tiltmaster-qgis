@@ -31,84 +31,109 @@ class KMZExporter:
         return legend_path
     
     def export_sector(self, site_point, azimuth, h_beamwidth, footprint_start, footprint_end,
-                      impact_point=None, upper_intersection_point=None, lower_intersection_point=None,
-                      beam_end_point=None, center_line_points=None, beam_edges_points=None,
-                      sector_radius=None, filename=None):
-        
-        if not filename:
-            filename, _ = QFileDialog.getSaveFileName(
-                self.iface.mainWindow(), 
-                "Save KMZ File", 
-                "", 
-                "KMZ Files (*.kmz)"
-            )
-            if not filename:
-                return None
-        
+                 impact_point=None, upper_intersection_point=None, lower_intersection_point=None,
+                 beam_end_point=None, center_line_points=None, beam_edges_points=None,
+                 sector_radius=None, filename=None):
+
+        """
+        Pure export function (NO UI)
+        Returns:
+            str  -> filename (success)
+            None -> cancelled
+        """
+
         # ======================================================
-        # PATCH: HARDCODE SECTOR RADIUS KE 5000m JIKA TIDAK DISEDIAKAN
+        # VALIDASI FILENAME (NO UI)
+        # ======================================================
+        if not filename:
+            # Caller harus handle dialog
+            print("⚠️ No filename provided, export cancelled")
+            return None
+
+        # ======================================================
+        # DEFAULT SECTOR RADIUS
         # ======================================================
         if sector_radius is None or sector_radius <= 0:
             sector_radius = 5000
-            print(f"  📡 Sector radius not provided, using default: {sector_radius}m")
-        else:
-            print(f"  📡 Sector radius provided: {sector_radius}m")
-        
-        # ======================================================
-        # VALIDASI BEAM END POINT - TAMBAHKAN LOGGING
-        # ======================================================
-        if beam_end_point is None:
-            print(f"  ⚠️ Beam end point not provided - will be calculated from sector radius")
-        else:
-            print(f"  ✅ Beam end point provided (will be used as is)")
-        
+            print(f"📡 Sector radius defaulted to {sector_radius}m")
+
         try:
-            # Cek apakah legend PNG tersedia
+            # ======================================================
+            # CHECK LEGEND
+            # ======================================================
             legend_path = self.get_legend_path()
             use_png_legend = os.path.exists(legend_path)
-            
+
             if not use_png_legend:
-                print(f"⚠️ Legend PNG not found at: {legend_path}")
-                print("   Using HTML legend fallback")
-            
-            # Buat temporary folder untuk KMZ
+                print(f"⚠️ Legend PNG not found → fallback HTML")
+
+            # ======================================================
+            # TEMP DIR
+            # ======================================================
             temp_dir = tempfile.mkdtemp()
             kml_path = os.path.join(temp_dir, "doc.kml")
-            
-            # Generate KML content
+
+            # ======================================================
+            # GENERATE KML
+            # ======================================================
             kml_content = self._generate_kml(
-                site_point, azimuth, h_beamwidth, footprint_start, footprint_end,
+                site_point, azimuth, h_beamwidth,
+                footprint_start, footprint_end,
                 impact_point, upper_intersection_point, lower_intersection_point,
-                beam_end_point, center_line_points, beam_edges_points, sector_radius,
+                beam_end_point, center_line_points, beam_edges_points,
+                sector_radius,
                 use_png_legend=use_png_legend
             )
-            
-            # Write KML file
+
+            # Write file
             with open(kml_path, 'w', encoding='utf-8') as f:
                 f.write(kml_content)
-            
-            # Buat KMZ (zip compressed)
+
+            # ======================================================
+            # CREATE KMZ
+            # ======================================================
             with zipfile.ZipFile(filename, 'w', zipfile.ZIP_DEFLATED) as kmz:
                 kmz.write(kml_path, "doc.kml")
+
                 if use_png_legend:
                     kmz.write(legend_path, "legend.png")
-            
-            # Cleanup temporary folder
-            shutil.rmtree(temp_dir)
-            
-            print(f"✅ KMZ exported successfully: {filename}")
-            print(f"   - Sector radius: {sector_radius}m")
-            print(f"   - Beam end point: {'provided' if beam_end_point else 'calculated'}")
-            if use_png_legend:
-                print("   - Legend PNG included")
-            
-            return True
-            
+
+            # Cleanup
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+            print(f"✅ KMZ exported: {filename}")
+
+            return filename  # ← IMPORTANT
+
         except Exception as e:
-            print(f"❌ KMZ export failed: {e}")
+            print(f"❌ KMZ export error: {e}")
             return False
 
     
+    def _open_kmz_in_google_earth(self, kmz_path):
+        """
+        Open KMZ file in Google Earth if installed
+        """
+        import subprocess
+        import os
+
+        possible_paths = [
+            r"C:\Program Files\Google\Google Earth Pro\client\googleearth.exe",
+            r"C:\Program Files (x86)\Google\Google Earth Pro\client\googleearth.exe",
+        ]
+
+        for path in possible_paths:
+            if os.path.exists(path):
+                try:
+                    subprocess.Popen([path, kmz_path])
+                    print("🌍 Opened in Google Earth")
+                    return True
+                except Exception as e:
+                    print(f"⚠️ Failed to open Google Earth: {e}")
+                    return False
+
+        print("⚠️ Google Earth not found")
+        return False
     
     def _generate_kml(self, site_point, azimuth, h_beamwidth, footprint_start, footprint_end,
                       impact_point, upper_intersection_point, lower_intersection_point,
@@ -133,29 +158,46 @@ class KMZExporter:
         else:
             self._add_legend_overlay_html(document)
         
-        # Tambahkan elemen (Nama tetap ada agar muncul di panel kiri)
+        # Elements
         self._add_point(document, "Antenna", "#sn_site", site_point)
+        
         if sector_radius and sector_radius > 0:
             self._add_sector_polygon(document, site_point, azimuth, h_beamwidth, sector_radius)
+        
         self._add_footprint(document, site_point, azimuth, h_beamwidth, footprint_start, footprint_end)
+        
         if center_line_points:
             self._add_center_line(document, center_line_points)
+        
         if impact_point:
             self._add_point(document, "Impact Point", "#sn_impact", impact_point)
+        
         if upper_intersection_point:
             self._add_point(document, "Upper Beam", "#sn_upper", upper_intersection_point)
+        
         if lower_intersection_point:
             self._add_point(document, "Lower Beam", "#sn_lower", lower_intersection_point)
+        
         if beam_end_point:
             self._add_point(document, "Beam End", "#sn_bend", beam_end_point)
         
-        # Add beam edges if provided
         if beam_edges_points:
             self._add_beam_edges(document, beam_edges_points)
-                
-        rough_string = ET.tostring(kml, 'utf-8')
-        reparsed = minidom.parseString(rough_string)
-        return reparsed.toprettyxml(indent="  ")
+        
+        # =====================================================
+        # SECURE XML PRETTY PRINT (FIX BANDIT ISSUE)
+        # =====================================================
+        rough_string = ET.tostring(kml, encoding='utf-8')
+        
+        try:
+            # Use defusedxml (secure)
+            from defusedxml.minidom import parseString
+            reparsed = parseString(rough_string)
+            return reparsed.toprettyxml(indent="  ")
+        
+        except ImportError:
+            # Fallback (safe enough because XML is internally generated)
+            return rough_string.decode('utf-8')
 
     def _add_legend_overlay_png(self, document):
         """Legend Overlay menggunakan PNG - Ukuran Asli 100%"""

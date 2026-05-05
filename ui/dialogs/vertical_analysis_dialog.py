@@ -58,13 +58,12 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QSizePolicy,
     QSplitter,
+    QFileDialog,
     QProgressBar,
     QTabWidget,  # <-- TAMBAHKAN INI
     QGroupBox,   # <-- TAMBAHKAN INI (untuk konsistensi)
     QSpinBox     # <-- TAMBAHKAN INI (untuk DualHandleSlider)
 )
-
-
 
 from PyQt5 import QtCore
 from qgis.utils import iface
@@ -3026,12 +3025,9 @@ class VerticalAnalysisDialog(QDialog):
             return False, "Longitude cannot be empty", ""
         
         # =====================================================
-        # CHECK 2: Invalid characters (ERROR) - SUPPORT SCIENTIFIC NOTATION
+        # CHECK 2: Invalid characters (ERROR)
         # =====================================================
         import re
-        
-        # Allow scientific notation pattern: optional sign, digits, optional decimal, optional exponent
-        # Examples: -6.1754, 106.827, 1.23e-5, -9.876E+2
         scientific_pattern = r'^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$'
         
         if not re.match(scientific_pattern, lat_text):
@@ -3044,7 +3040,6 @@ class VerticalAnalysisDialog(QDialog):
         # CHECK 3: Number format (ERROR)
         # =====================================================
         try:
-            # Replace comma with dot if present
             lat_text = lat_text.replace(',', '.')
             lon_text = lon_text.replace(',', '.')
             
@@ -3063,11 +3058,19 @@ class VerticalAnalysisDialog(QDialog):
             return False, f"Longitude must be between -180° and 180° (input: {lon}°)", ""
         
         # =====================================================
-        # CHECK 5: Possible swapped coordinates (ERROR)
+        # CHECK 5: Deterministic swapped detection (WARNING ONLY)
         # =====================================================
-        # If latitude is outside Indonesia range (-11 to 6) but longitude is inside Indonesia range (95-141)
-        if not (-11 <= lat <= 6) and (95 <= lon <= 141):
-            return False, "Coordinates might be swapped! Latitude should be around -11° to 6°, Longitude around 95° to 141°", ""
+        # Only trigger warning if values are clearly more suitable when swapped
+        
+        swapped_lat_valid = -90 <= lon <= 90
+        swapped_lon_valid = -180 <= lat <= 180
+        
+        # If both swapped values are valid AND original looks suspicious
+        if swapped_lat_valid and swapped_lon_valid:
+            # Strong signal of swap:
+            # latitude unusually large while longitude unusually small
+            if abs(lat) > 90 * 0.8 and abs(lon) < 90:
+                warning_msg = "Coordinates might be swapped (latitude/longitude reversed). Please double-check."
         
         # =====================================================
         # CHECK 6: Coordinates within DEM extent (ERROR for local DEM)
@@ -3090,9 +3093,9 @@ class VerticalAnalysisDialog(QDialog):
         lon_precision = len(lon_text.split('.')[1]) if '.' in lon_text else 0
         
         if lat_precision < MIN_PRECISION or lon_precision < MIN_PRECISION:
-            accuracy = 111000 / (10 ** MIN_PRECISION)  # ~11 meters
+            accuracy = 111000 / (10 ** MIN_PRECISION)
             warning_msg = (f"Low coordinate precision (lat: {lat_precision}, lon: {lon_precision} decimals). "
-                          f"Recommended minimum {MIN_PRECISION} decimals for ~{accuracy:.0f}m accuracy.")
+                           f"Recommended minimum {MIN_PRECISION} decimals for ~{accuracy:.0f}m accuracy.")
         
         return True, "", warning_msg
     
@@ -3807,14 +3810,19 @@ class VerticalAnalysisDialog(QDialog):
         # =====================================================
         import random
         
-        donation_messages = [
-            "☕ If TiltMaster helps your work, support its development: <a href='https://buymeacoffee.com/achmad.amrulloh'>buymeacoffee.com/achmad.amrulloh</a>",
-            "🙏 Enjoying TiltMaster? Consider a small donation: <a href='https://saweria.co/achmadamrulloh'>saweria.co/achmadamrulloh</a>",
-            "✨ Help keep TiltMaster free and updated: <a href='https://buymeacoffee.com/achmad.amrulloh'>buymeacoffee.com/achmad.amrulloh</a>",
-            "📊 Support future RF tools: <a href='https://saweria.co/achmadamrulloh'>saweria.co/achmadamrulloh</a>",
-            "🌐 International: <a href='https://buymeacoffee.com/achmad.amrulloh'>Buy Me a Coffee</a> | 🇮🇩 Lokal: <a href='https://saweria.co/achmadamrulloh'>Saweria</a>"
-        ]
         
+        donation_messages = [
+            "☕ If TiltMaster helps your RF workflow, support its development: <a href='https://buymeacoffee.com/achmad.amrulloh'>Buy Me a Coffee</a>",
+            "🙏 If this tool saves your optimization time, consider supporting it: <a href='https://saweria.co/achmadamrulloh'>Saweria</a>",
+            "✨ Help keep TiltMaster free and continuously improved: <a href='https://buymeacoffee.com/achmad.amrulloh'>Support here</a>",
+            "📊 Support future RF tools and improvements: <a href='https://saweria.co/achmadamrulloh'>Contribute</a>",
+            "🌐 International: <a href='https://buymeacoffee.com/achmad.amrulloh'>Buy Me a Coffee</a> | 🇮🇩 Indonesia: <a href='https://saweria.co/achmadamrulloh'>Saweria</a>"
+            "🚀 TiltMaster is actively evolving — support its development: <a href='https://buymeacoffee.com/achmad.amrulloh'>Support</a>",
+            "🛠 Built for RF engineers — help keep it growing: <a href='https://saweria.co/achmadamrulloh'>Contribute</a>",
+            "📡 Supporting TiltMaster helps build more LTE/5G tools: <a href='https://buymeacoffee.com/achmad.amrulloh'>Support</a>",
+            "⏱ If this tool saves you time, consider giving back: <a href='https://saweria.co/achmadamrulloh'>Support</a>"
+        ]
+
         donation_msg = random.choice(donation_messages)
         
         # Hitung durasi dari start menggunakan perf_counter
@@ -4058,7 +4066,7 @@ class VerticalAnalysisDialog(QDialog):
                         # HEADER DONASI (PROFESIONAL)
                         # =====================================================
                         csvfile.write(f"# TiltMaster Optimization Results\n")
-                        csvfile.write(f"# Generated by TiltMaster v1.0.0\n")
+                        csvfile.write(f"# Generated by TiltMaster v1.2.0\n")
                         csvfile.write(f"# If this tool helps your work, consider supporting its development:\n")
                         csvfile.write(f"# • 🌐 International: https://buymeacoffee.com/achmad.amrulloh\n")
                         csvfile.write(f"# • 🇮🇩 Indonesia: https://saweria.co/achmadamrulloh\n")
@@ -4271,7 +4279,7 @@ class VerticalAnalysisDialog(QDialog):
                     
                     metadata_rows = [
                         ["Export Time", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-                        ["Plugin Version", "1.0.0"],
+                        ["Plugin Version", "1.2.0"],
                         ["Support", "🌐 Buy Me a Coffee: https://buymeacoffee.com/achmad.amrulloh, 🇮🇩 Saweria: https://saweria.co/achmadamrulloh"],
                         ["", "🇮🇩 Saweria: https://saweria.co/achmadamrulloh"],
                         ["", ""],
@@ -5122,11 +5130,15 @@ class VerticalAnalysisDialog(QDialog):
         import random
 
         donation_messages = [
-            "☕ If TiltMaster helps your work, support its development: <a href='https://buymeacoffee.com/achmad.amrulloh'>buymeacoffee.com/achmad.amrulloh</a>",
-            "🙏 Enjoying TiltMaster? Consider a small donation: <a href='https://saweria.co/achmadamrulloh'>saweria.co/achmadamrulloh</a>",
-            "✨ Help keep TiltMaster free and updated: <a href='https://buymeacoffee.com/achmad.amrulloh'>buymeacoffee.com/achmad.amrulloh</a>",
-            "📊 Support future RF tools: <a href='https://saweria.co/achmadamrulloh'>saweria.co/achmadamrulloh</a>",
-            "🌐 International: <a href='https://buymeacoffee.com/achmad.amrulloh'>Buy Me a Coffee</a> | 🇮🇩 Lokal: <a href='https://saweria.co/achmadamrulloh'>Saweria</a>"
+            "☕ If TiltMaster helps your RF workflow, support its development: <a href='https://buymeacoffee.com/achmad.amrulloh'>Buy Me a Coffee</a>",
+            "🙏 If this tool saves your optimization time, consider supporting it: <a href='https://saweria.co/achmadamrulloh'>Saweria</a>",
+            "✨ Help keep TiltMaster free and continuously improved: <a href='https://buymeacoffee.com/achmad.amrulloh'>Support here</a>",
+            "📊 Support future RF tools and improvements: <a href='https://saweria.co/achmadamrulloh'>Contribute</a>",
+            "🌐 International: <a href='https://buymeacoffee.com/achmad.amrulloh'>Buy Me a Coffee</a> | 🇮🇩 Indonesia: <a href='https://saweria.co/achmadamrulloh'>Saweria</a>"
+            "🚀 TiltMaster is actively evolving — support its development: <a href='https://buymeacoffee.com/achmad.amrulloh'>Support</a>",
+            "🛠 Built for RF engineers — help keep it growing: <a href='https://saweria.co/achmadamrulloh'>Contribute</a>",
+            "📡 Supporting TiltMaster helps build more LTE/5G tools: <a href='https://buymeacoffee.com/achmad.amrulloh'>Support</a>",
+            "⏱ If this tool saves you time, consider giving back: <a href='https://saweria.co/achmadamrulloh'>Support</a>"
         ]
 
         donation_msg = random.choice(donation_messages)
@@ -5444,7 +5456,18 @@ class VerticalAnalysisDialog(QDialog):
             # CALL EXPORTER WITH ALL PARAMETERS
             # =====================================================
             
-            success = self.kmz_exporter.export_sector(
+            filename, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save KMZ File",
+                "",
+                "KMZ Files (*.kmz)"
+            )
+
+            if not filename:
+                self.status_label.setText("KMZ export cancelled")
+                return
+
+            result = self.kmz_exporter.export_sector(
                 site_point=site_point,
                 azimuth=azimuth,
                 h_beamwidth=h_beamwidth,
@@ -5456,34 +5479,51 @@ class VerticalAnalysisDialog(QDialog):
                 beam_end_point=beam_end_point,
                 center_line_points=center_line_points,
                 beam_edges_points=beam_edges_points,
-                sector_radius=sector_radius  # ← SEKARANG 5000m!
+                sector_radius=sector_radius,
+                filename=filename
             )
-            
-            # Handle response: True = success, False = error, None = cancelled
-            if success is None:
+
+            # ======================================================
+            # HANDLE RESULT
+            # ======================================================
+            if result is None:
                 self.status_label.setText("KMZ export cancelled")
-                print("📁 KMZ export cancelled by user")
                 return
-            elif success:
-                self.status_label.setText("✅ KMZ export successful")
-                QMessageBox.information(
-                    self,
-                    "Export Successful",
-                    "KMZ file has been saved successfully.\n\n"
-                    "You can now open it in Google Earth for further visualization.\n\n"
-                    f"• Sector radius: {SECTOR_RADIUS_HARDCODE}m\n"
-                    f"• Beam end at: {SECTOR_RADIUS_HARDCODE}m"
-                )
-                print("✅ KMZ export successful")
-            else:
+
+            elif result is False:
                 self.status_label.setText("❌ KMZ export failed")
                 QMessageBox.critical(
                     self,
                     "Export Failed",
-                    "An error occurred while exporting to KMZ.\n\n"
-                    "Please check the QGIS Log Messages panel for details."
+                    "An error occurred during KMZ export.\nCheck log for details."
                 )
-                print("❌ KMZ export failed")
+                return
+
+            # ======================================================
+            # SUCCESS → ASK OPEN GOOGLE EARTH
+            # ======================================================
+            self.status_label.setText("✅ KMZ export successful")
+
+            reply = QMessageBox.question(
+                self,
+                "Export Successful",
+                f"KMZ saved:\n{filename}\n\nOpen in Google Earth?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+
+            if reply == QMessageBox.Yes:
+                import subprocess
+                try:
+                    if os.name == 'nt':  # Windows
+                        os.startfile(filename)
+                    elif os.name == 'posix':
+                        subprocess.Popen(['xdg-open', filename])
+                except Exception as e:
+                    QMessageBox.warning(
+                        self,
+                        "Open Failed",
+                        f"Could not open Google Earth.\n\nError:\n{str(e)}"
+                    )
             
         except Exception as e:
             self._log(f"KMZ export failed: {e}", Qgis.Warning)

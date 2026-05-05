@@ -1,7 +1,7 @@
 [general]
 name=TiltMaster - RF Vertical Analysis
 description=Advanced RF Vertical Analysis and Tilt Optimization for Telecom Planning
-version=1.1.0
+version=1.2.0
 qgisMinimumVersion=3.22
 pyqtgraphMinimumVersion=0.13.0
 author=Achmad Amrulloh
@@ -23,13 +23,24 @@ icon=icon.png
 experimental=False
 deprecated=False
 
-changelog=1.1.0 (2026-04-03)
+changelog=1.2.0 (2026-05-04)
+    - FIX: Coordinate validation now supports global usage (removed Indonesia-only restriction)
+    - FIX: Eliminated duplicate "Export Successful" dialog (UI logic refactored)
+    - FIX: Resolved KMZ export flow with proper separation of UI and backend logic
+    - FIX: Bandit security issue by replacing unsafe XML parsing with defusedxml
+    - IMPROVEMENT: Refactored KMZ exporter to pure logic (no UI dependency)
+    - IMPROVEMENT: Improved export workflow with user confirmation before opening Google Earth
+    - IMPROVEMENT: Added optional dependency check for defusedxml at plugin startup
+    - IMPROVEMENT: Cleaner and more professional UX for KMZ export process
+
+  1.1.0 (2026-04-03)
     - FIX: Zoom In/Out tools now work with single click (no drag required)
     - FIX: Export KMZ now correctly handles user cancellation
     - FIX: PyQtGraph error message now with clickable link to troubleshooting guide
     - NEW: Added navigation toolbar (Zoom In, Zoom Out, Reset View) to Coverage Map
-	- NEW: KMZ compression (KML + PNG legend in single file) and correction for RF layer
+    - NEW: KMZ compression (KML + PNG legend in single file) and correction for RF layer
     - NEW: Added SVG icons for toolbar buttons and Export KMZ
     - NEW: Improved memory management with proper cache cleanup on dialog close
+
   1.0.0 (2026-03-17)
     - Initial release version

@@ -49,27 +49,37 @@ class TiltMasterAboutDialog(QDialog, FORM_CLASS):
         self.setWindowTitle("About TiltMaster")
     
     def _show_donation_options(self):
-        """Show donation options dialog"""
+        """Show donation options dialog (improved UX)"""
+
         msg = QMessageBox(self)
         msg.setWindowTitle("Support TiltMaster")
+
         msg.setText(
-            "If TiltMaster has been helpful in your work, consider supporting its continued development:\n\n"
-            "🌐 International: Buy Me a Coffee\n"
-            "   https://buymeacoffee.com/achmad.amrulloh\n\n"
-            "🇮🇩 Indonesia: Saweria\n"
-            "   https://saweria.co/achmadamrulloh\n\n"
-            "Choose your preferred platform below."
+            "If TiltMaster helps your RF optimization workflow\n"
+            "(even saving a few minutes per task),\n\n"
+            "you can support its development here:"
         )
+
+        msg.setInformativeText(
+            "Your support helps me continue building RF tools like this."
+        )
+
         msg.setStandardButtons(QMessageBox.NoButton)
-        
-        # Create custom buttons
-        bmac_btn = msg.addButton("🌐 Buy Me a Coffee", QMessageBox.ActionRole)
-        saweria_btn = msg.addButton("🇮🇩 Saweria", QMessageBox.ActionRole)
-        cancel_btn = msg.addButton("Close", QMessageBox.RejectRole)
-        
+
+        # =====================================================
+        # BUTTONS (with better hierarchy)
+        # =====================================================
+        bmac_btn = msg.addButton("☕ Support (International)", QMessageBox.AcceptRole)
+        saweria_btn = msg.addButton("🇮🇩 Support (Indonesia)", QMessageBox.AcceptRole)
+        cancel_btn = msg.addButton("Maybe later", QMessageBox.RejectRole)
+
+        # Highlight primary button (BMAC)
+        msg.setDefaultButton(bmac_btn)
+
         msg.exec_()
-        
+
         if msg.clickedButton() == bmac_btn:
             QDesktopServices.openUrl(QUrl("https://buymeacoffee.com/achmad.amrulloh"))
+
         elif msg.clickedButton() == saweria_btn:
             QDesktopServices.openUrl(QUrl("https://saweria.co/achmadamrulloh"))
